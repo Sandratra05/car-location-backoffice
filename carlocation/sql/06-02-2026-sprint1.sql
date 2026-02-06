@@ -14,3 +14,9 @@ CREATE TABLE reservation(
    PRIMARY KEY(id_reservation),
    FOREIGN KEY(id_hotel) REFERENCES hotel(id_hotel)
 );
+
+INSERT INTO hotel (libelle, distance) VALUES
+('Hotel Ibis', 15.3),
+('Hotel du Louvre', 20),
+('Hotel Carlton', 19.8),
+('Hotel Colbert', 21);
