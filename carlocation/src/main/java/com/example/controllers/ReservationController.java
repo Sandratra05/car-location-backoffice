@@ -2,6 +2,7 @@ package com.example.controllers;
 
 import mg.ririnina.annotations.Controller;
 import mg.ririnina.annotations.GetMapping;
+import mg.ririnina.annotations.JsonResponse;
 import mg.ririnina.annotations.PostMapping;
 import mg.ririnina.annotations.RequestParam;
 import mg.ririnina.view.ModelView;
@@ -11,7 +12,7 @@ import com.example.entity.Hotel;
 
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.time.LocalDateTime;
+import java.util.List;
 
 @Controller
 public class ReservationController {
@@ -65,6 +66,12 @@ public class ReservationController {
         }
 
         return mv;
+    }
+
+    @JsonResponse
+    @GetMapping("/api/reservations")
+    public List<Reservation> getAllReservations() throws SQLException {
+        return Reservation.findAll();
     }
 
 }

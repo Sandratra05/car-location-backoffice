@@ -10,6 +10,7 @@ public class JsonUtil {
         if (obj == null) return "null";
         if (obj instanceof String) return "\"" + escapeJson((String) obj) + "\"";
         if (obj instanceof Number || obj instanceof Boolean) return obj.toString();
+        if (obj instanceof java.util.Date) return "\"" + obj.toString() + "\"";
         if (obj instanceof List) {
             List<?> list = (List<?>) obj;
             StringBuilder sb = new StringBuilder("[");
