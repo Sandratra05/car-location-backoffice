@@ -26,8 +26,8 @@ public class ReservationController {
             mv.addAttribute("action", "create");
             mv.addAttribute("title", "Nouvelle réservation");
         } catch (SQLException e) {
-            mv.setView("/error.jsp");
-            mv.addAttribute("error", e.getMessage());
+            mv.setView("/reservations-form.jsp");
+            mv.addAttribute("error", "Impossible de charger les hôtels : " + e.getMessage());
         }
         return mv;
     }
@@ -54,14 +54,13 @@ public class ReservationController {
 
             reservation.save();
 
-            mv.setView("/reservations-list.jsp");
-            mv.addAttribute("reservations", Reservation.findAll());
+            mv.setView("/reservations-form.jsp");
+            mv.addAttribute("success", "Réservation enregistrée avec succès !");
             mv.addAttribute("hotels", Hotel.findAll());
-            mv.addAttribute("message", "Liste des réservations");
 
         } catch (Exception e) {
             mv.setView("/reservations-form.jsp");
-            mv.addAttribute("error", e.getMessage());
+            mv.addAttribute("error", "Erreur lors de l'enregistrement" + e.getMessage());
             mv.addAttribute("action", "create");
         }
 

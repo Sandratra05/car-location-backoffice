@@ -23,11 +23,18 @@
             <%= request.getAttribute("title") != null ? request.getAttribute("title") : "Formulaire Réservation" %>
         </h2>
 
-        <% if (request.getAttribute("error") != null) { %>
-            <div class="alert alert-error">
-                <%= request.getAttribute("error") %>
-            </div>
-        <% } %>
+            <% if (request.getAttribute("error") != null) { %>
+                <div class="alert alert-error">
+                    <%= request.getAttribute("error") %>
+                </div>
+            <% } %>
+
+            <% if (request.getAttribute("success") != null) { %>
+                <div class="alert alert-success">
+                    <%= request.getAttribute("success") %>
+                </div>
+            <% } %>
+
 
         <%
             Reservation reservation = (Reservation) request.getAttribute("reservation");
