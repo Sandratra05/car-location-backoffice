@@ -10,6 +10,7 @@ import com.example.entity.Reservation;
 import com.example.entity.Hotel;
 
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 
 @Controller
@@ -43,11 +44,12 @@ public class ReservationController {
             Reservation reservation = new Reservation();
 
             reservation.setNbPassager(Integer.parseInt(nbPassager));
-            reservation.setDateHeureArrivee(
-                    LocalDateTime.parse(dateHeureArrivee.replace("T", " "))
-            );
-            reservation.setIdHotel(Integer.parseInt(idHotel));
-            reservation.setIdClient(idClient); 
+            reservation.setDateHeureArrivee(Timestamp.valueOf(dateHeureArrivee.replace("T", " ") + ":00"));
+
+            Hotel hotel = Hotel.findById(Integer.parseInt(idHotel));
+            reservation.setHotel(hotel);
+
+            reservation.setIdClient(idClient);
 
             reservation.save();
 
@@ -64,4 +66,5 @@ public class ReservationController {
 
         return mv;
     }
+
 }
