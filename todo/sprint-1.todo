@@ -1,0 +1,8 @@
+TL : Sandratra ETU003126
+Dev Framework : Sariaka ETU003378
+Dev Spring MVC : Finoana ETU003203
+
+Todo :
+- Creation des classes Reservation et Hotel
+- Creation methode save() pour inserer une reservation 
+- Script d'insertion d'hotel
