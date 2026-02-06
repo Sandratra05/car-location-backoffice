@@ -3,8 +3,8 @@ Dev Framework : Sariaka ETU003378
 Dev Spring MVC : Finoana ETU003203
 
 Todo Sprint 1 :
-- Creation des classes Reservation et Hotel
+- (ok) Creation des classes Reservation et Hotel
 - Creation de Controller pour les reponses REST (utilisation annotation @JsonResponse)
 - Creation de formulaire de reservation
-- Creation des methodes save() et findAll()  
-- Script d'insertion d'hotel
+- (ok) Creation des methodes save() et findAll()  
+- (ok) Script d'insertion d'hotel
