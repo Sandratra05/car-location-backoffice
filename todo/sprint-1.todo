@@ -2,7 +2,9 @@ TL : Sandratra ETU003126
 Dev Framework : Sariaka ETU003378
 Dev Spring MVC : Finoana ETU003203
 
-Todo :
+Todo Sprint 1 :
 - Creation des classes Reservation et Hotel
-- Creation methode save() pour inserer une reservation 
+- Creation de Controller pour les reponses REST (utilisation annotation @JsonResponse)
+- Creation de formulaire de reservation
+- Creation des methodes save() et findAll()  
 - Script d'insertion d'hotel
