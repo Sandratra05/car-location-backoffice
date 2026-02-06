@@ -1,5 +1,14 @@
 package com.example.entity;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.example.config.DbConnection;
+
 public class Hotel {
     private Integer idHotel;
     private String libelle;
@@ -38,4 +47,20 @@ public class Hotel {
         this.distance = distance;
     }
 
+    public static List<Hotel> findAll() throws SQLException {
+        List<Hotel> hotels = new ArrayList<>();
+        String sql = "SELECT * FROM hotel";
+        try (Connection conn = DbConnection.getInstance().getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                Hotel hotel = new Hotel();
+                hotel.setIdHotel(rs.getInt("id_hotel"));
+                hotel.setLibelle(rs.getString("libelle"));
+                hotel.setDistance(rs.getDouble("distance"));
+                hotels.add(hotel);
+            }
+        }
+        return hotels;
+    }
 }
