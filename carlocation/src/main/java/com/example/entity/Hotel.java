@@ -1,6 +1,7 @@
 package com.example.entity;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -62,5 +63,22 @@ public class Hotel {
             }
         }
         return hotels;
+    }
+
+    public static Hotel findById(Integer id) throws SQLException {
+        String sql = "SELECT * FROM hotel WHERE id_hotel = ?";
+        try (Connection conn = DbConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, id);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                Hotel hotel = new Hotel();
+                hotel.setIdHotel(rs.getInt("id_hotel"));
+                hotel.setLibelle(rs.getString("libelle"));
+                hotel.setDistance(rs.getDouble("distance"));
+                return hotel;
+            }
+        }
+        return null;
     }
 }
