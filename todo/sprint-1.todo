@@ -4,7 +4,7 @@ Dev Spring MVC : Finoana ETU003203
 
 Todo Sprint 1 :
 - (ok) Creation des classes Reservation et Hotel
-- Creation de Controller pour les reponses REST (utilisation annotation @JsonResponse)
-- Creation de formulaire de reservation
+- (ok) Creation de Controller pour les reponses REST (utilisation annotation @JsonResponse)
+- (ok) Creation de formulaire de reservation
 - (ok) Creation des methodes save() et findAll()  
 - (ok) Script d'insertion d'hotel
