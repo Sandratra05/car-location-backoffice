@@ -1,0 +1,43 @@
+TL : Sariaka ETU003378
+Dev Framework : Finoana ETU003203
+Dev Spring MVC : Sandratra ETU003126
+
+Todo sprint 2 :
+- Creer la table Vehicule : 
+    - id,
+    - reference, 
+    - nb_places, 
+    - type_carburant (D, Es, H, El)
+
+- Creer la classe Vehicule avec ses getters et setters
+
+- CRUD pour Vehicule : 
+    - save()
+    - findAll()
+    - update(id)
+    - delete(id)
+
+- Ajouter VehiculeController pour les reponses REST 
+(utilisation annotation @JsonResponse) :
+    - endpoint pour save()
+    - endpoint pour findAll()
+    - endpoint pour update(id)
+    - endpoint pour delete(id)
+
+- Appliquer les securites token sur quelques methodes  
+
+- Creer la table Token :
+    - id,
+    - token (uuid)
+    - date_expiration
+
+- Creer une fonction : findByToken(token)
+
+- Creer une fonction : checkExpirationToken(token)
+
+- Recuperer le token de la requete et appeler les fonctions 
+ci-dessus (token)
+
+- Si les methodes ont besoin de token :
+    - si expire : renvoye un message d'erreur ""acces refuse""
+    - sinon : envoyer la reponse API
