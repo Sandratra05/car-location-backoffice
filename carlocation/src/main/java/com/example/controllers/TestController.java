@@ -3,21 +3,36 @@ package com.example.controllers;
 import com.example.config.DbConnection;
 import mg.ririnina.annotations.Controller;
 import mg.ririnina.annotations.GetMapping;
+import mg.ririnina.annotations.JsonResponse;
 import mg.ririnina.view.ModelView;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Controller
 public class TestController {
-    @GetMapping("/test")
-    public ModelView test() {
-        ModelView mv = new ModelView();
-        mv.setView("test.jsp");
-        mv.addAttribute("message", "Le framework ririnina fonctionne !");
-        return mv;
+    // @GetMapping("/test")
+    // public ModelView test() {
+    //     ModelView mv = new ModelView();
+    //     mv.setView("test.jsp");
+    //     mv.addAttribute("message", "Le framework ririnina fonctionne !");
+    //     return mv;
+    // }
+
+   
+
+    @GetMapping("/api/test")
+    @JsonResponse(status = "success", code = 200)
+    public Map<String, Object> test() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Le framework fonctionne !");
+        response.put("data", "Hello from TestController");
+        return response;
     }
 
     @GetMapping("/hello")
@@ -50,6 +65,9 @@ public class TestController {
             return mv;
         }
     }
+
+
+   
 //        ModelView mv = new ModelView();
 //        mv.setView("dbTest.jsp");
 //        mv.addAttribute("dbMessage", "Connexion à la base de données réussie !");
