@@ -27,10 +27,10 @@ public class VehiculeController {
      * GET /api/vehicules - Liste tous les véhicules
      */
     @GetMapping("/api/vehicules")
-    @JsonResponse(status = "success", code = 200)
-    public Map<String, Object> getAllVehicules(@Session Map<String, Object> session) {
+    @JsonResponse
+    public Map<String, Object> getAllVehicules(@RequestParam("token") String token) {
         try {
-            if (!isTokenValid(session)) {
+            if (!isTokenValid(token)) {
                 return createErrorResponse("Token invalide ou expiré", 401);
             }
             
@@ -50,10 +50,10 @@ public class VehiculeController {
      * GET /api/vehicules/{id} - Récupère un véhicule par ID
      */
     @GetMapping("/api/vehicules/{id}")
-    @JsonResponse(status = "success", code = 200)
-    public Map<String, Object> getVehiculeById(String id, @Session Map<String, Object> session) {
+    @JsonResponse
+    public Map<String, Object> getVehiculeById(String id, @RequestParam("token") String token) {
         try {
-            if (!isTokenValid(session)) {
+            if (!isTokenValid(token)) {
                 return createErrorResponse("Token invalide ou expiré", 401);
             }
             
@@ -76,28 +76,31 @@ public class VehiculeController {
      * POST /api/vehicules/create - Crée un nouveau véhicule
      */
     @PostMapping("/api/vehicules/create")
-    @JsonResponse(status = "success", code = 201)
+    @JsonResponse
     public Map<String, Object> createVehicule(
             @RequestParam("reference") String reference,
-            @RequestParam("nbPlace") int nbPlace,
-            @RequestParam("typeCarburant") String typeCarburantStr,
-            @Session Map<String, Object> session) {
+            @RequestParam("nbPlace") String nbPlace,
+            @RequestParam("typeCarburant") String typeCarburant,
+            @RequestParam("token") String token) {
         try {
-            if (!isTokenValid(session)) {
+            if (!isTokenValid(token)) {
                 return createErrorResponse("Token invalide ou expiré", 401);
             }
             
-            TypeCarburant typeCarburant = TypeCarburant.valueOf(typeCarburantStr.toUpperCase());
+            int places = Integer.parseInt(nbPlace);
+            TypeCarburant type = TypeCarburant.valueOf(typeCarburant.toUpperCase());
             
             Vehicule vehicule = new Vehicule();
             vehicule.setReference(reference);
-            vehicule.setNbPlace(nbPlace);
-            vehicule.setTypeCarburant(typeCarburant);
+            vehicule.setNbPlace(places);
+            vehicule.setTypeCarburant(type);
 
             Vehicule created = vehiculeService.createVehicule(vehicule);
             VehiculeDTO dto = new VehiculeDTO(created);
             
             return createSuccessResponse(dto, "Véhicule créé avec succès");
+        } catch (NumberFormatException e) {
+            return createErrorResponse("Nombre de places invalide", 400);
         } catch (IllegalArgumentException e) {
             return createErrorResponse("Validation: " + e.getMessage(), 400);
         } catch (Exception e) {
@@ -106,65 +109,53 @@ public class VehiculeController {
         }
     }
 
- /**
- * POST /api/vehicules/{id}/update - Met à jour un véhicule
- */
-@PostMapping("/api/vehicules/{id}/update")
-@JsonResponse(status = "success", code = 200)
-public Map<String, Object> updateVehicule(
-        @RequestParam("reference") String reference,
-        @RequestParam("nbPlace") String nbPlace,
-        @RequestParam("typeCarburant") String typeCarburant,
-        String id,  // ✅ Paramètre de path EN DERNIER
-        @Session Map<String, Object> session) {
-    try {
-        System.out.println("========== updateVehicule ==========");
-        System.out.println("ID reçu: " + id);
-        System.out.println("Reference: " + reference);
-        System.out.println("NbPlace: " + nbPlace);
-        System.out.println("TypeCarburant: " + typeCarburant);
-        System.out.println("======================================");
-        
-        if (!isTokenValid(session)) {
-            return createErrorResponse("Token invalide ou expiré", 401);
-        }
-        
-        if (id == null || id.isEmpty()) {
-            return createErrorResponse("ID manquant dans l'URL", 400);
-        }
-        
-        // Convertir les paramètres
-        Long vehiculeId = Long.parseLong(id);
-        int places = Integer.parseInt(nbPlace);
-        TypeCarburant type = TypeCarburant.valueOf(typeCarburant.toUpperCase());
-        
-        Vehicule vehicule = new Vehicule();
-        vehicule.setReference(reference);
-        vehicule.setNbPlace(places);
-        vehicule.setTypeCarburant(type);
+    /**
+     * POST /api/vehicules/{id}/update - Met à jour un véhicule
+     */
+    @PostMapping("/api/vehicules/{id}/update")
+    @JsonResponse
+    public Map<String, Object> updateVehicule(
+            String id,
+            @RequestParam("reference") String reference,
+            @RequestParam("nbPlace") String nbPlace,
+            @RequestParam("typeCarburant") String typeCarburant,
+            @RequestParam("token") String token) {
+        try {
+            if (!isTokenValid(token)) {
+                return createErrorResponse("Token invalide ou expiré", 401);
+            }
+            
+            Long vehiculeId = Long.parseLong(id);
+            int places = Integer.parseInt(nbPlace);
+            TypeCarburant type = TypeCarburant.valueOf(typeCarburant.toUpperCase());
+            
+            Vehicule vehicule = new Vehicule();
+            vehicule.setReference(reference);
+            vehicule.setNbPlace(places);
+            vehicule.setTypeCarburant(type);
 
-        Vehicule updated = vehiculeService.updateVehicule(vehiculeId, vehicule);
-        VehiculeDTO dto = new VehiculeDTO(updated);
-        
-        return createSuccessResponse(dto, "Véhicule mis à jour avec succès");
-    } catch (NumberFormatException e) {
-        return createErrorResponse("ID ou nombre de places invalide", 400);
-    } catch (IllegalArgumentException e) {
-        return createErrorResponse(e.getMessage(), 404);
-    } catch (Exception e) {
-        e.printStackTrace();
-        return createErrorResponse("Erreur: " + e.getMessage(), 500);
+            Vehicule updated = vehiculeService.updateVehicule(vehiculeId, vehicule);
+            VehiculeDTO dto = new VehiculeDTO(updated);
+            
+            return createSuccessResponse(dto, "Véhicule mis à jour avec succès");
+        } catch (NumberFormatException e) {
+            return createErrorResponse("ID ou nombre de places invalide", 400);
+        } catch (IllegalArgumentException e) {
+            return createErrorResponse(e.getMessage(), 404);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return createErrorResponse("Erreur: " + e.getMessage(), 500);
+        }
     }
-}
 
     /**
      * GET /api/vehicules/{id}/delete - Supprime un véhicule
      */
     @GetMapping("/api/vehicules/{id}/delete")
-    @JsonResponse(status = "success", code = 200)
-    public Map<String, Object> deleteVehicule(String id, @Session Map<String, Object> session) {
+    @JsonResponse
+    public Map<String, Object> deleteVehicule(String id, @RequestParam("token") String token) {
         try {
-            if (!isTokenValid(session)) {
+            if (!isTokenValid(token)) {
                 return createErrorResponse("Token invalide ou expiré", 401);
             }
             
@@ -184,12 +175,7 @@ public Map<String, Object> updateVehicule(
 
     // ========== HELPERS ==========
 
-    private boolean isTokenValid(Map<String, Object> session) {
-        if (session == null) return false;
-        
-        String token = (String) session.get("auth_token");
-        if (token == null || token.isEmpty()) return false;
-        
+    private boolean isTokenValid(String token) {
         try {
             return tokenService.validateToken(token);
         } catch (Exception e) {
