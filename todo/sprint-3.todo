@@ -21,6 +21,22 @@ Todo sprint 3 :
 
 - Creer la classe Parametre,Hotel,Distance avec ses getters et setters
 
+- Creer classe Trajet :
+    - Vehicule
+    - Hotel
+    - List<Reservation>
+    - Heure depart
+    - Heure retour
+
+- Creer classe PlanningResult :
+    - List<Trajet>
+    - List<Reservation> nonAssignees
+
+- Gerer cas :
+    - aucune reservation
+    - aucun vehicule disponible
+    - affichage message approprie
+
 - Creer formulaire d’insertion Parametre
 
 -Pour Parametre,creer fonctions :
@@ -37,7 +53,7 @@ Todo sprint 3 :
 -Creer fonctions de planifications:
     -findReservationsByDate(date):Retourne toutes les reservations du jour
     -findAvailableVehicules():Retourne tous les vehicules disponibles
-    -assignVehiculeToReservation(reservation):il faut appliquer les regles metiers
+    -assignVehiculeToReservation(List<Reservation>):il faut appliquer les regles metiers
             -Capacite vehicule ≥ nb passagers
             -Capacite la plus proche
             -Priorite DIESEL si egalite
@@ -47,10 +63,7 @@ Todo sprint 3 :
     -calculateReturnTime(reservation):Calcule heure retour hotel → aeroport
     -planifyByDate(date):
     Retourne :
-            -Liste vehicules avec reservations assignees
-            -Heure depart
-            -Heure retour
-            -Hotel concerne
+            -Liste trajet
     -findUnassignedReservations(LocalDate date):Retourne les reservations sans vehicule
 
 -Creer script SQL qui supprime les donnees planification
