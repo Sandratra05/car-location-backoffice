@@ -87,7 +87,7 @@ public class Reservation {
         List<Reservation> list = new ArrayList<>();
 
         String sql = """
-            SELECT r.*, h.libelle, h.distance
+            SELECT r.*, h.code, h.libelle, h.aeroport
             FROM reservation r
             JOIN hotel h ON r.id_hotel = h.id_hotel
         """;
@@ -98,9 +98,10 @@ public class Reservation {
 
             while (rs.next()) {
                 Hotel hotel = new Hotel(
-                        rs.getInt("id_hotel"),
-                        rs.getString("libelle"),
-                        rs.getDouble("distance")
+                    rs.getInt("id_hotel"),
+                    rs.getString("code"),
+                    rs.getString("libelle"),
+                    rs.getBoolean("aeroport")
                 );
 
                 Reservation r = new Reservation();
@@ -120,7 +121,7 @@ public class Reservation {
         List<Reservation> list = new ArrayList<>();
 
         String sql = """
-            SELECT r.*, h.libelle, h.distance
+            SELECT r.*, h.code, h.libelle, h.aeroport
             FROM reservation r
             JOIN hotel h ON r.id_hotel = h.id_hotel
             WHERE DATE(r.date_heure_arrivee) = ?
@@ -133,11 +134,12 @@ public class Reservation {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    Hotel hotel = new Hotel(
+                        Hotel hotel = new Hotel(
                             rs.getInt("id_hotel"),
+                            rs.getString("code"),
                             rs.getString("libelle"),
-                            rs.getDouble("distance")
-                    );
+                            rs.getBoolean("aeroport")
+                        );
 
                     Reservation r = new Reservation();
                     r.idReservation = rs.getInt("id_reservation");
