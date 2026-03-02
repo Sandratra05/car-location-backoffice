@@ -26,7 +26,7 @@ public class DistanceRepository {
     }
 
     public Distance findDistance(int fromHotelId, int toHotelId) throws SQLException {
-        String sql = "SELECT * FROM distance WHERE from = ? AND to = ? LIMIT 1";
+        String sql = "SELECT * FROM distance WHERE from_hotel_id = ? AND to_hotel_id = ? LIMIT 1";
 
         try (Connection conn = DbConnection.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -38,8 +38,8 @@ public class DistanceRepository {
                 if (rs.next()) {
                     Distance d = new Distance();
                     d.setIdDistance(rs.getLong("id_distance"));
-                    d.setFrom(rs.getInt("from"));
-                    d.setTo(rs.getInt("to"));
+                    d.setFrom(rs.getInt("from_hotel_id"));
+                    d.setTo(rs.getInt("to_hotel_id"));
                     d.setKilometre(rs.getBigDecimal("kilometre"));
                     return d;
                 }
