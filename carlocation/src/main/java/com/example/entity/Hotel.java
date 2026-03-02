@@ -12,16 +12,18 @@ import com.example.config.DbConnection;
 
 public class Hotel {
     private Integer idHotel;
+    private String code;
     private String libelle;
-    private Double distance;
+    private Boolean aeroport;
 
     public Hotel() {
     }
 
-    public Hotel(Integer idHotel, String libelle, Double distance) {
+    public Hotel(Integer idHotel, String code, String libelle, Boolean aeroport) {
         this.idHotel = idHotel;
+        this.code = code;
         this.libelle = libelle;
-        this.distance = distance;
+        this.aeroport = aeroport;
     }
 
     public Integer getIdHotel() {
@@ -32,6 +34,14 @@ public class Hotel {
         this.idHotel = idHotel;
     }
 
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
+    }
+
     public String getLibelle() {
         return libelle;
     }
@@ -40,12 +50,12 @@ public class Hotel {
         this.libelle = libelle;
     }
 
-    public Double getDistance() {
-        return distance;
+    public Boolean getAeroport() {
+        return aeroport;
     }
 
-    public void setDistance(Double distance) {
-        this.distance = distance;
+    public void setAeroport(Boolean aeroport) {
+        this.aeroport = aeroport;
     }
 
     public static List<Hotel> findAll() throws SQLException {
@@ -57,8 +67,9 @@ public class Hotel {
             while (rs.next()) {
                 Hotel hotel = new Hotel();
                 hotel.setIdHotel(rs.getInt("id_hotel"));
+                hotel.setCode(rs.getString("code"));
                 hotel.setLibelle(rs.getString("libelle"));
-                hotel.setDistance(rs.getDouble("distance"));
+                hotel.setAeroport(rs.getBoolean("aeroport"));
                 hotels.add(hotel);
             }
         }
@@ -74,8 +85,9 @@ public class Hotel {
             if (rs.next()) {
                 Hotel hotel = new Hotel();
                 hotel.setIdHotel(rs.getInt("id_hotel"));
+                hotel.setCode(rs.getString("code"));
                 hotel.setLibelle(rs.getString("libelle"));
-                hotel.setDistance(rs.getDouble("distance"));
+                hotel.setAeroport(rs.getBoolean("aeroport"));
                 return hotel;
             }
         }

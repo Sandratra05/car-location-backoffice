@@ -1,0 +1,82 @@
+TL : Finoana ETU003203
+Dev Framework : Sandratra ETU003126 et Sariaka ETU003378
+Dev Spring MVC : 
+
+Todo sprint 3 :
+- Creer la table Parametre : 
+    - id,
+    - vitesse_moyenne, 
+    - temps_d_attente 
+- Mis a jour de la table Hotel:
+    -id_hotel ,
+    -code ,
+    -libelle ,
+    -aeroport BOOLEAN 
+
+- Creer la table Distance:
+    -id_distance ,
+    -from_hotel,
+    -to_hotel,
+    -kilometer
+
+- Creer la classe Parametre,Hotel,Distance avec ses getters et setters
+
+- Creer classe Trajet :
+    - Vehicule
+    - Hotel
+    - List<Reservation>
+    - Heure depart
+    - Heure retour
+
+- Creer classe PlanningResult :
+    - List<Trajet>
+    - List<Reservation> nonAssignees
+
+- Gerer cas :
+    - aucune reservation
+    - aucun vehicule disponible
+    - affichage message approprie
+
+- Creer formulaire d’insertion Parametre
+
+-Pour Parametre,creer fonctions :
+    -save(Parametre p)
+    -findLatest() → retourne le dernier parametre
+
+-Pour la table Hotel:
+    -mettre a jour la classe Hotel
+
+-Pour la table Distance, creer fonctions:
+    -save(Distance d)
+    -findDistance(from, to)
+
+-Creer fonctions de planifications:
+    -findReservationsByDate(date):Retourne toutes les reservations du jour
+    -findAvailableVehicules():Retourne tous les vehicules disponibles
+    -assignVehiculeToReservation(List<Reservation>):il faut appliquer les regles metiers
+            -Capacite vehicule ≥ nb passagers
+            -Capacite la plus proche
+            -Priorite DIESEL si egalite
+            -Un vehicule = un seul hotel
+            -Client inseparable
+    -calculateDepartureTime(reservation):Calcule heure depart aeroport → hotel
+    -calculateReturnTime(reservation):Calcule heure retour hotel → aeroport
+    -planifyByDate(date):
+    Retourne :
+            -Liste trajet
+    -findUnassignedReservations(LocalDate date):Retourne les reservations sans vehicule
+
+-Creer script SQL qui supprime les donnees planification
+                  qui remet a l'etat initiale
+
+-Dans controllers,ajouter 
+    -ParametreController:
+        -Page insertion parametre
+        -saveParametre()
+    -PlanningController:
+        -Page 1 : formulaire date
+            GET /planning
+            POST /planning/generate
+        -Page 2 : resultat planification
+        -Page 3 :page reservations non assignees
+            GET /planning/unassigned
