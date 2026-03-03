@@ -16,6 +16,8 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 
 public class VehiculeService {
     
@@ -234,6 +236,34 @@ public class VehiculeService {
         }
         
         return assignVehiculeToReservation(reservations);
+    }
+
+    /**
+     * Retourne la liste des réservations qui ne figurent pas dans la map d'assignations.
+     * La comparaison se fait par `idReservation`.
+     */
+    public List<Reservation> findUnassignedReservations(List<Reservation> reservations, Map<Vehicule, List<Reservation>> assignments) {
+        List<Reservation> result = new ArrayList<>();
+        if (reservations == null || reservations.isEmpty()) return result;
+
+        Set<Integer> assignedIds = new HashSet<>();
+        if (assignments != null && !assignments.isEmpty()) {
+            for (List<Reservation> assignes : assignments.values()) {
+                if (assignes == null) continue;
+                for (Reservation resa : assignes) {
+                    if (resa != null && resa.getIdReservation() != null) assignedIds.add(resa.getIdReservation());
+                }
+            }
+        }
+
+        for (Reservation resa : reservations) {
+            Integer id = resa != null ? resa.getIdReservation() : null;
+            if (id == null || !assignedIds.contains(id)) {
+                result.add(resa);
+            }
+        }
+
+        return result;
     }
 
 }

@@ -41,9 +41,19 @@ public class ReservationController {
         try {
             Timestamp ts = Timestamp.valueOf(date.replace("T", " ") + ":00");
             VehiculeService vs = new VehiculeService();
-            Map<Vehicule, List<Reservation>> assignments = vs.planifyByDate(ts);
+            List<Reservation> reservations = Reservation.findReservationsByDate(ts);
+            if (reservations.isEmpty()) {
+                mv.setView("planning-form.jsp");
+                mv.addAttribute("error", "Aucune réservation trouvée pour la date sélectionnée.");
+                return mv;
+            }
+
+            Map<Vehicule, List<Reservation>> assignments = vs.assignVehiculeToReservation(reservations);
+            List<Reservation> unassigned = vs.findUnassignedReservations(reservations, assignments);
+
             mv.setView("planning-result.jsp");
             mv.addAttribute("assignments", assignments);
+            mv.addAttribute("unassigned", unassigned);
         } catch (Exception e) {
             mv.setView("planning-form.jsp");
             mv.addAttribute("error", "Erreur lors de la génération du planning: " + e.getMessage());
