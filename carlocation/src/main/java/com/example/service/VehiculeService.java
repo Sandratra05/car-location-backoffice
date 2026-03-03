@@ -115,32 +115,87 @@ public class VehiculeService {
         }
 
         // Assume all reservations are for the same date
-        List<Vehicule> availableVehicules = getAllVehicules();
+        List<Vehicule> allVehicules = getAllVehicules();
 
         Map<Vehicule, List<Reservation>> assignments = new HashMap<>();
-        // Sort reservations to assign larger groups first (helps fit big groups)
-        reservations.sort((a, b) -> Integer.compare(b.getNbPassager(), a.getNbPassager()));
+        // remaining capacity per vehicle (initially full capacity)
+        Map<Vehicule, Integer> remaining = new HashMap<>();
+        for (Vehicule v : allVehicules) {
+            remaining.put(v, v.getNbPlace());
+        }
+
+        // Sort reservations by arrival time ascending: first incoming passengers are boarded first
+        reservations.sort((a, b) -> {
+            Timestamp ta = a.getDateHeureArrivee();
+            Timestamp tb = b.getDateHeureArrivee();
+            if (ta == null && tb == null) return 0;
+            if (ta == null) return 1;
+            if (tb == null) return -1;
+            return ta.compareTo(tb);
+        });
 
         for (Reservation resa : reservations) {
-            // 1) find minimal capacity that can carry the reservation
+            int needed = resa.getNbPassager() != null ? resa.getNbPassager() : 0;
+            if (needed <= 0) continue;
+
+            Vehicule chosen = null;
+
+            // 1) Try to fit into already assigned vehicles (fill current vehicles first)
+            List<Vehicule> assignedCandidates = new ArrayList<>();
+            for (Vehicule v : assignments.keySet()) {
+                Integer rem = remaining.getOrDefault(v, v.getNbPlace());
+                if (rem >= needed) assignedCandidates.add(v);
+            }
+
+            if (!assignedCandidates.isEmpty()) {
+                // pick the best fit among assigned vehicles: minimal remaining capacity >= needed
+                int bestRem = Integer.MAX_VALUE;
+                for (Vehicule v : assignedCandidates) {
+                    int rem = remaining.get(v);
+                    if (rem < bestRem) bestRem = rem;
+                }
+
+                // collect those with bestRem and prefer DIESEL
+                Vehicule dieselCandidate = null;
+                for (Vehicule v : assignedCandidates) {
+                    if (remaining.get(v) == bestRem) {
+                        if (v.getTypeCarburant() == TypeCarburant.DIESEL) {
+                            dieselCandidate = v;
+                            break;
+                        }
+                        if (chosen == null) chosen = v;
+                    }
+                }
+                if (dieselCandidate != null) chosen = dieselCandidate;
+                if (chosen != null) {
+                    assignments.get(chosen).add(resa);
+                    remaining.put(chosen, remaining.get(chosen) - needed);
+                    continue;
+                }
+            }
+
+            // 2) Otherwise, pick among unused or not-yet-filled vehicles
+            // Find minimal vehicle capacity that can carry the reservation (consider full capacity for unassigned)
             int capacityMin = Integer.MAX_VALUE;
-            for (Vehicule vehicule : availableVehicules) {
-                int capacaityVehicule = vehicule.getNbPlace();
-                if (capacaityVehicule >= resa.getNbPassager() && capacaityVehicule < capacityMin) {
-                    capacityMin = capacaityVehicule;
+            for (Vehicule v : allVehicules) {
+                int cap = v.getNbPlace();
+                // consider current remaining (could be full for unassigned)
+                int rem = remaining.getOrDefault(v, cap);
+                // only consider vehicles that can carry the whole reservation in one go
+                if (rem >= needed && cap < capacityMin) {
+                    capacityMin = cap;
                 }
             }
 
             if (capacityMin == Integer.MAX_VALUE) {
-                // no vehicle can carry this reservation
+                // no vehicle can carry this reservation entirely
                 continue;
             }
 
-            // 2) collect candidates with capacity == capacityMin
             List<Vehicule> candidates = new ArrayList<>();
-            for (Vehicule vehicule : availableVehicules) {
-                if (vehicule.getNbPlace() == capacityMin) {
-                    candidates.add(vehicule);
+            for (Vehicule v : allVehicules) {
+                if (v.getNbPlace() == capacityMin && remaining.getOrDefault(v, v.getNbPlace()) >= needed) {
+                    candidates.add(v);
                 }
             }
 
@@ -148,19 +203,18 @@ public class VehiculeService {
                 continue;
             }
 
-            // 3) prefer DIESEL among candidates
-            Vehicule chosen = null;
+            // prefer DIESEL among candidates
+            Vehicule diesel = null;
             for (Vehicule c : candidates) {
                 if (c.getTypeCarburant() == TypeCarburant.DIESEL) {
-                    chosen = c;
+                    diesel = c;
                     break;
                 }
             }
-            if (chosen == null) {
-                chosen = candidates.get(0);
-            }
+            if (diesel != null) chosen = diesel; else chosen = candidates.get(0);
 
             assignments.computeIfAbsent(chosen, k -> new ArrayList<>()).add(resa);
+            remaining.put(chosen, remaining.getOrDefault(chosen, chosen.getNbPlace()) - needed);
             // in-memory only: do not persist to DB
         }
 
@@ -175,6 +229,10 @@ public class VehiculeService {
     public Map<Vehicule, List<Reservation>> planifyByDate(Timestamp date) throws SQLException {
         if (date == null) return new HashMap<>();
         List<Reservation> reservations = Reservation.findReservationsByDate(date);
+        if (reservations.isEmpty()) {
+            throw new IllegalArgumentException("Aucune réservation trouvée pour la date: " + date);
+        }
+        
         return assignVehiculeToReservation(reservations);
     }
 

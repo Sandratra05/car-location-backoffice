@@ -9,6 +9,8 @@ import mg.ririnina.view.ModelView;
 
 import com.example.entity.Reservation;
 import com.example.entity.Hotel;
+import com.example.entity.Vehicule;
+import com.example.service.VehiculeService;
 import com.example.service.TokenService;
 
 import java.sql.SQLException;
@@ -24,6 +26,29 @@ public class ReservationController {
 
     public ReservationController() {
         this.tokenService = new TokenService();
+    }
+
+    @GetMapping("/planning/new")
+    public ModelView newPlanning() {
+        ModelView mv = new ModelView();
+        mv.setView("planning-form.jsp");
+        return mv;
+    }
+
+    @PostMapping("/planning/planify")
+    public ModelView planify(@RequestParam("date") String date) {
+        ModelView mv = new ModelView();
+        try {
+            Timestamp ts = Timestamp.valueOf(date.replace("T", " ") + ":00");
+            VehiculeService vs = new VehiculeService();
+            Map<Vehicule, List<Reservation>> assignments = vs.planifyByDate(ts);
+            mv.setView("planning-result.jsp");
+            mv.addAttribute("assignments", assignments);
+        } catch (Exception e) {
+            mv.setView("planning-form.jsp");
+            mv.addAttribute("error", "Erreur lors de la génération du planning: " + e.getMessage());
+        }
+        return mv;
     }
 
     @GetMapping("/reservations/new")
