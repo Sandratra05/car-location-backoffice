@@ -57,40 +57,5 @@ public class Vehicule {
         this.typeCarburant = typeCarburant;
     }
 
-    public static List<Vehicule> findAvailableVehicules(Timestamp date) throws SQLException {
-        List<Vehicule> available = new ArrayList<>();
 
-        String sql = """
-            SELECT v.*
-            FROM vehicule v
-            WHERE v.id NOT IN (
-                SELECT rv.vehicule_id FROM reservation_vehicule rv
-                JOIN reservation r ON rv.reservation_id = r.id_reservation
-                WHERE DATE(r.date_heure_arrivee) = ?
-            )
-            ORDER BY v.id
-        """;
-
-        try (Connection conn = DbConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setDate(1, new Date(date.getTime()));
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    Vehicule v = new Vehicule(
-                        rs.getLong("id"),
-                        rs.getString("reference"),
-                        rs.getInt("nb_place"),
-                        TypeCarburant.valueOf(rs.getString("type_carburant"))
-                    );
-                    available.add(v);
-                }
-            }
-            return available;
-        } catch (SQLException e) {
-            // If the association table doesn't exist yet, fallback to returning all vehicles
-        }
-        return null;
-    }
 }

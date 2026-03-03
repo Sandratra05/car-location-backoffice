@@ -1,9 +1,14 @@
 package com.example.entity;
 
 import com.example.config.DbConnection;
+import com.example.repository.ParametreRepository;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.math.BigDecimal;
+import com.example.repository.DistanceRepository;
+import java.util.Optional;
 
 public class Reservation {
 
@@ -153,5 +158,83 @@ public class Reservation {
             }
         }
         return list;
+    }
+
+    /**
+     * Calcule l'heure de départ du véhicule pour cette réservation en utilisant
+     * le paramètre de configuration le plus récent (temps d'attente en minutes).
+     * Si aucun paramètre n'est présent, retourne l'heure d'arrivée.
+     */
+    public Timestamp calculHeureDeDepart() throws SQLException {
+        ParametreRepository repo = new ParametreRepository();
+        Parametre p = repo.findLatest();
+        return calculHeureDeDepart(p);
+    }
+
+    /**
+     * Calcule l'heure de départ du véhicule en ajoutant le temps d'attente
+     * (en minutes) indiqué par le paramètre à l'heure d'arrivée.
+     * Exemple: arrivée 08:00 + attente 30min => départ 08:30.
+     * Si parametre est null, retourne l'heure d'arrivée.
+     */
+    public Timestamp calculHeureDeDepart(Parametre parametre) {
+        if (dateHeureArrivee == null) return null;
+        if (parametre == null || parametre.getTempsAttenteMin() == null) {
+            return dateHeureArrivee;
+        }
+        long waitMs = TimeUnit.MINUTES.toMillis(parametre.getTempsAttenteMin());
+        return new Timestamp(dateHeureArrivee.getTime() + waitMs);
+    }
+
+    /**
+     * Calcule l'heure de retour à l'aéroport en partant de l'heure de départ
+     * (départ = arrivée + temps d'attente). Le calcul utilise la distance
+     * entre l'aéroport et l'hôtel (via DistanceRepository) et la vitesse
+     * moyenne (Parametre.vitesseMoyenneKmh). Le trajet considéré est
+     * aéroport -> hôtel -> aéroport (aller-retour).
+     * Retourne null si la distance ou la vitesse ne sont pas disponibles.
+     */
+    public Timestamp calculHeureRetour() throws SQLException {
+        ParametreRepository prefRepo = new ParametreRepository();
+        Parametre p = prefRepo.findLatest();
+        return calculHeureRetour(p);
+    }
+
+    public Timestamp calculHeureRetour(Parametre parametre) throws SQLException {
+        if (dateHeureArrivee == null) return null;
+
+        // compute departure time
+        Timestamp depart = calculHeureDeDepart(parametre);
+
+        // find airport hotel id
+        Integer airportHotelId = null;
+        for (Hotel h : Hotel.findAll()) {
+            if (Boolean.TRUE.equals(h.getAeroport())) {
+                airportHotelId = h.getIdHotel();
+                break;
+            }
+        }
+        if (airportHotelId == null) return null;
+
+        int hotelId = this.hotel != null ? this.hotel.getIdHotel() : -1;
+        if (hotelId == -1) return null;
+
+        DistanceRepository dr = new DistanceRepository();
+        Distance d = dr.findDistance(airportHotelId, hotelId);
+        if (d == null || d.getKilometre() == null) return null;
+
+        if (parametre == null || parametre.getVitesseMoyenneKmh() == null) return null;
+
+        BigDecimal km = d.getKilometre();
+        BigDecimal vitesse = parametre.getVitesseMoyenneKmh(); // km/h
+
+        if (vitesse.compareTo(BigDecimal.ZERO) <= 0) return null;
+
+        // time (hours) = km / vitesse ; convert to milliseconds and double for precision
+        double hoursOneWay = km.divide(vitesse, 6, BigDecimal.ROUND_HALF_UP).doubleValue();
+        long travelMsOneWay = (long) (hoursOneWay * 3600.0 * 1000.0);
+        long totalTravelMs = travelMsOneWay * 2L; // there and back
+
+        return new Timestamp(depart.getTime() + totalTravelMs);
     }
 }
