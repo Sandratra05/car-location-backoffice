@@ -167,4 +167,15 @@ public class VehiculeService {
         return assignments;
     }
 
+    /**
+     * Planification principale pour une date :
+     * - récupère les réservations du jour
+     * - délègue l'assignation aux véhicules à `assignVehiculeToReservation`
+     */
+    public Map<Vehicule, List<Reservation>> planifyByDate(Timestamp date) throws SQLException {
+        if (date == null) return new HashMap<>();
+        List<Reservation> reservations = Reservation.findReservationsByDate(date);
+        return assignVehiculeToReservation(reservations);
+    }
+
 }
