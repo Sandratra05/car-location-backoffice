@@ -58,28 +58,28 @@ public class Main {
         
         if (classesLocation.isFile()) {
             // Si c'est un JAR, on est en mode production
-            System.out.println("Running from JAR: " + classesLocation.getAbsolutePath());
+            //System.out.println("Running from JAR: " + classesLocation.getAbsolutePath());
             // Ajouter le JAR comme ressource pour que les classes soient accessibles
             resources.addJarResources(new JarResourceSet(resources, "/WEB-INF/classes",
                     classesLocation.getAbsolutePath(), "/"));
         } else {
             // Mode développement - classes dans un répertoire
-            System.out.println("Running from classes directory: " + classesLocation.getAbsolutePath());
+            //System.out.println("Running from classes directory: " + classesLocation.getAbsolutePath());
             resources.addPreResources(new DirResourceSet(resources, "/WEB-INF/classes",
                     classesLocation.getAbsolutePath(), "/"));
         }
         
         context.setResources(resources);
 
-        System.out.println("===========================================");
-        System.out.println("  Backoffice Car Location - Démarrage");
-        System.out.println("===========================================");
-        System.out.println("  Port: " + port);
-        System.out.println("  Webapp: " + webappDir.getAbsolutePath());
-        System.out.println("===========================================");
+        //System.out.println("===========================================");
+        //System.out.println("  Backoffice Car Location - Démarrage");
+        //System.out.println("===========================================");
+        //System.out.println("  Port: " + port);
+        //System.out.println("  Webapp: " + webappDir.getAbsolutePath());
+        //System.out.println("===========================================");
 
         tomcat.start();
-        System.out.println("Serveur démarré sur http://localhost:" + port);
+        //System.out.println("Serveur démarré sur http://localhost:" + port);
         //System.out.println("  - http://localhost:" + port + "/test");
         //System.out.println("  - http://localhost:" + port + "/hello");
         tomcat.getServer().await();
@@ -138,7 +138,7 @@ public class Main {
                         Files.createDirectories(target.getParent());
                         try (InputStream is = Files.newInputStream(source)) {
                             Files.copy(is, target);
-                            System.out.println("Extracted: " + relativePath);
+                            //System.out.println("Extracted: " + relativePath);
                         }
                     }
                 } catch (IOException e) {
