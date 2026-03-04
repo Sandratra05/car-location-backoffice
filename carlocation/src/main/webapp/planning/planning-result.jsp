@@ -57,8 +57,8 @@
                         // Construire détails réservations
                         String details = "";
                         for (Reservation r : resList) {
-                            if (!details.isEmpty()) details += ", ";
-                            details += "#" + r.getIdReservation() + " (" + r.getNbPassager() + "p " + (r.getHotel() != null ? r.getHotel().getLibelle() : "-") + ")";
+                            if (!details.isEmpty()) details += "<br/>";
+                            details += "Resa num " + r.getIdReservation() + " (" + r.getNbPassager() + " prs - " + (r.getHotel() != null ? r.getHotel().getLibelle() : "-") + ")";
                         }
                 %>
                     <tr>
