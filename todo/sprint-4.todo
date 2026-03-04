@@ -1,0 +1,13 @@
+TL : Sandratra ETU003126
+Dev Framework : Sariaka ETU003378 sy Finoana ETU003203
+Dev Spring MVC : 
+
+Todo Sprint 4 :
+- ( ) Modifier la fonction : assignVehiculeToReservation (dans la classe VehiculeService) pour trier 
+    d'abord les reservations par capacité, ensuite assigner les resa avec la plus grande capacité 
+- ( ) Ajout de fonction : calculTotalDistance (Reservation) => Calculer la distance totale que le
+    vehicule va parcourir (distance totale = aéroport + hotel1 + hotel2 + ... )
+- ( ) Ajout de fonction : calculHeureRetourTotal( List<Reservation> ) => calculer le temps total qu'un vehicule
+    fait le trajet en entier
+- ( ) Modification de la page plannig-result.jsp : appeler la fonction ci-dessus pour afficher l'heure de retour
+    du vehicule à l'aéroport
