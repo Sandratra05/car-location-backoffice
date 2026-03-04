@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Comparator;
+import java.util.Random;
 
 import com.example.entity.Distance;
 import com.example.entity.Hotel;
@@ -160,17 +161,13 @@ public class VehiculeService {
                     if (rem < bestRem) bestRem = rem;
                 }
 
-                Vehicule dieselCandidate = null;
+                List<Vehicule> bestCandidates = new ArrayList<>();
                 for (Vehicule v : assignedCandidates) {
                     if (remaining.get(v) == bestRem) {
-                        if (v.getTypeCarburant() == TypeCarburant.DIESEL) {
-                            dieselCandidate = v;
-                            break;
-                        }
-                        if (chosen == null) chosen = v;
+                        bestCandidates.add(v);
                     }
                 }
-                if (dieselCandidate != null) chosen = dieselCandidate;
+                chosen = chooseFromCandidates(bestCandidates);
                 if (chosen != null) {
                     assignments.get(chosen).add(resa);
                     remaining.put(chosen, remaining.get(chosen) - needed);
@@ -203,14 +200,7 @@ public class VehiculeService {
                 continue;
             }
 
-            Vehicule diesel = null;
-            for (Vehicule c : candidates) {
-                if (c.getTypeCarburant() == TypeCarburant.DIESEL) {
-                    diesel = c;
-                    break;
-                }
-            }
-            if (diesel != null) chosen = diesel; else chosen = candidates.get(0);
+            chosen = chooseFromCandidates(candidates);
 
             assignments.computeIfAbsent(chosen, k -> new ArrayList<>()).add(resa);
             remaining.put(chosen, remaining.getOrDefault(chosen, chosen.getNbPlace()) - needed);
@@ -515,6 +505,41 @@ public class VehiculeService {
         }
         sb.append(" -> Aéroport");
         return sb.toString();
+    }
+
+    /**
+     * Choisit un véhicule parmi les candidats.
+     * Si tous les candidats ont le même type de carburant, choix aléatoire.
+     * Sinon, privilégie le diesel.
+     */
+    private Vehicule chooseFromCandidates(List<Vehicule> candidates) {
+        if (candidates.isEmpty()) return null;
+        if (candidates.size() == 1) return candidates.get(0);
+
+        // Vérifier si tous ont le même type de carburant
+        TypeCarburant first = candidates.get(0).getTypeCarburant();
+        boolean allSame = true;
+        for (Vehicule v : candidates) {
+            if (v.getTypeCarburant() != first) {
+                allSame = false;
+                break;
+            }
+        }
+
+        if (allSame) {
+            // Choix aléatoire
+            Random rand = new Random();
+            return candidates.get(rand.nextInt(candidates.size()));
+        } else {
+            // Privilégier le diesel
+            for (Vehicule v : candidates) {
+                if (v.getTypeCarburant() == TypeCarburant.DIESEL) {
+                    return v;
+                }
+            }
+            // Si pas de diesel, prendre le premier
+            return candidates.get(0);
+        }
     }
 
 }
