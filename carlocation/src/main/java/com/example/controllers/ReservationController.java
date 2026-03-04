@@ -51,9 +51,48 @@ public class ReservationController {
             Map<Vehicule, List<Reservation>> assignments = vs.assignVehiculeToReservation(reservations);
             List<Reservation> unassigned = vs.findUnassignedReservations(reservations, assignments);
 
+            // Préparer les données supplémentaires pour l'affichage
+            Map<Vehicule, String> routes = new HashMap<>();
+            Map<Vehicule, Timestamp> departTimes = new HashMap<>();
+            Map<Vehicule, Timestamp> returnTimes = new HashMap<>();
+
+            for (Map.Entry<Vehicule, List<Reservation>> entry : assignments.entrySet()) {
+                Vehicule v = entry.getKey();
+                List<Reservation> resas = entry.getValue();
+
+                try {
+                    String route = vs.getRouteDescription(resas);
+                    routes.put(v, route);
+                } catch (Exception e) {
+                    routes.put(v, "Aéroport -> Aéroport");
+                }
+
+                Timestamp earliestDepart = null;
+                for (Reservation r : resas) {
+                    try {
+                        Timestamp dep = r.calculHeureDeDepart();
+                        if (dep != null && (earliestDepart == null || dep.before(earliestDepart))) {
+                            earliestDepart = dep;
+                        }
+                    } catch (Exception e) {}
+                }
+                departTimes.put(v, earliestDepart);
+
+                Timestamp ret = null;
+                try {
+                    if (!resas.isEmpty()) {
+                        ret = resas.get(0).calculHeureRetourTotal(resas);
+                    }
+                } catch (Exception e) {}
+                returnTimes.put(v, ret);
+            }
+
             mv.setView("planning-result.jsp");
             mv.addAttribute("assignments", assignments);
             mv.addAttribute("unassigned", unassigned);
+            mv.addAttribute("routes", routes);
+            mv.addAttribute("departTimes", departTimes);
+            mv.addAttribute("returnTimes", returnTimes);
         } catch (Exception e) {
             mv.setView("planning-form.jsp");
             mv.addAttribute("error", "Erreur lors de la génération du planning: " + e.getMessage());
