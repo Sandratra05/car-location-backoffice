@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.Comparator;
 
 import com.example.entity.Distance;
 import com.example.entity.Hotel;
@@ -308,31 +309,75 @@ public class VehiculeService {
             return BigDecimal.ZERO;
         }
 
-        // 3. Trier les hôtels par distance depuis l'aéroport (plus proche d'abord)
-        final Integer aeroportIdFinal = aeroportId;
-        hotelIds.sort((h1, h2) -> {
-            try {
-                BigDecimal d1 = getDistanceKm(distanceRepo, aeroportIdFinal, h1);
-                BigDecimal d2 = getDistanceKm(distanceRepo, aeroportIdFinal, h2);
-                return d1.compareTo(d2);
-            } catch (SQLException e) {
-                return 0;
+        // 3. Construire l'ordre optimal des hôtels : commencer à l'aéroport, aller au plus proche, puis du courant au plus proche restant, etc.
+        List<Integer> orderedHotels = new ArrayList<>();
+        Set<Integer> remaining = new HashSet<>(hotelIds);
+        int current = aeroportId;
+        while (!remaining.isEmpty()) {
+            Integer next = null;
+            BigDecimal minDist = null;
+            String nextName = null;
+            for (Integer h : remaining) {
+                BigDecimal d = getDistanceKm(distanceRepo, current, h);
+                if (d != null) {
+                    boolean isBetter = false;
+                    if (minDist == null || d.compareTo(minDist) < 0) {
+                        isBetter = true;
+                    } else if (d.compareTo(minDist) == 0) {
+                        // même distance, comparer noms alphabétiquement
+                        try {
+                            Hotel hObj = Hotel.findById(h);
+                            String hName = hObj != null ? hObj.getLibelle() : "";
+                            if (nextName == null || hName.compareTo(nextName) < 0) {
+                                isBetter = true;
+                            }
+                        } catch (SQLException e) {
+                        }
+                    }
+                    if (isBetter) {
+                        minDist = d;
+                        next = h;
+                        try {
+                            Hotel hObj = Hotel.findById(h);
+                            nextName = hObj != null ? hObj.getLibelle() : "";
+                        } catch (SQLException e) {
+                            nextName = "";
+                        }
+                    }
+                }
             }
-        });
+            if (next != null) {
+                orderedHotels.add(next);
+                remaining.remove(next);
+                current = next;
+            } else {
+                // si pas trouvé, ajouter le premier restant
+                if (!remaining.isEmpty()) {
+                    next = remaining.iterator().next();
+                    orderedHotels.add(next);
+                    remaining.remove(next);
+                    current = next;
+                }
+            }
+        }
 
         // 4. Calculer la distance totale : Aéroport → Hôtel1 → Hôtel2 → ... → Aéroport
         BigDecimal totalDistance = BigDecimal.ZERO;
 
         // Aéroport → Premier hôtel
-        totalDistance = totalDistance.add(getDistanceKm(distanceRepo, aeroportId, hotelIds.get(0)));
+        if (!orderedHotels.isEmpty()) {
+            totalDistance = totalDistance.add(getDistanceKm(distanceRepo, aeroportId, orderedHotels.get(0)));
+        }
 
         // Hôtel1 → Hôtel2 → ... → Dernier hôtel
-        for (int i = 0; i < hotelIds.size() - 1; i++) {
-            totalDistance = totalDistance.add(getDistanceKm(distanceRepo, hotelIds.get(i), hotelIds.get(i + 1)));
+        for (int i = 0; i < orderedHotels.size() - 1; i++) {
+            totalDistance = totalDistance.add(getDistanceKm(distanceRepo, orderedHotels.get(i), orderedHotels.get(i + 1)));
         }
 
         // Dernier hôtel → Aéroport
-        totalDistance = totalDistance.add(getDistanceKm(distanceRepo, hotelIds.get(hotelIds.size() - 1), aeroportId));
+        if (!orderedHotels.isEmpty()) {
+            totalDistance = totalDistance.add(getDistanceKm(distanceRepo, orderedHotels.get(orderedHotels.size() - 1), aeroportId));
+        }
 
         return totalDistance;
     }

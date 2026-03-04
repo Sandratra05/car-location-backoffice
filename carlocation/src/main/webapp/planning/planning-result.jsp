@@ -3,6 +3,7 @@
 <%@ page import="com.example.entity.Reservation" %>
 <%@ page import="java.util.*" %>
 <%@ page import="java.text.SimpleDateFormat" %>
+<%@ page import="java.util.Comparator" %>
 
 <!DOCTYPE html>
 <html>
@@ -34,9 +35,8 @@
                 <thead style="background:#1e3a5f; text-align:left;">
                     <tr>
                         <th style="padding:8px; border:1px solid #ddd;">Véhicule</th>
-                        <th style="padding:8px; border:1px solid #ddd;">Num Réservation</th>
-                        <th style="padding:8px; border:1px solid #ddd;">Nb Passagers</th>
-                        <th style="padding:8px; border:1px solid #ddd;">Hôtel</th>
+                        <th style="padding:8px; border:1px solid #ddd;">Réservations</th>
+                        <th style="padding:8px; border:1px solid #ddd;">Trajet</th>
                         <th style="padding:8px; border:1px solid #ddd;">Départ véhicule</th>
                         <th style="padding:8px; border:1px solid #ddd;">Retour aéroport</th>
                     </tr>
@@ -58,25 +58,141 @@
                             // Ignorer les erreurs
                         }
 
+                        // Calculer le trajet
+                        String trajet = "Aéroport";
+                        try {
+                            // Trouver l'aéroport
+                            com.example.entity.Hotel airport = null;
+                            for (com.example.entity.Hotel h : com.example.entity.Hotel.findAll()) {
+                                if (Boolean.TRUE.equals(h.getAeroport())) {
+                                    airport = h;
+                                    break;
+                                }
+                            }
+                            if (airport != null) {
+                                // Récupérer les hôtels uniques
+                                java.util.Set<Integer> hotelIdSet = new java.util.HashSet<>();
+                                for (Reservation r : resList) {
+                                    if (r.getHotel() != null) {
+                                        hotelIdSet.add(r.getHotel().getIdHotel());
+                                    }
+                                }
+                                java.util.List<Integer> hotelIds = new java.util.ArrayList<>(hotelIdSet);
+                                // Construire l'ordre optimal des hôtels
+                                com.example.repository.DistanceRepository dr = new com.example.repository.DistanceRepository();
+                                Integer aeroportId = airport.getIdHotel();
+                                java.util.List<Integer> orderedHotels = new java.util.ArrayList<>();
+                                java.util.Set<Integer> remaining = new java.util.HashSet<>(hotelIds);
+                                int current = aeroportId;
+                                while (!remaining.isEmpty()) {
+                                    Integer next = null;
+                                    java.math.BigDecimal minDist = null;
+                                    String nextName = null;
+                                    for (Integer h : remaining) {
+                                        java.math.BigDecimal d = null;
+                                        try {
+                                            com.example.entity.Distance dist = dr.findDistance(current, h);
+                                            if (dist != null && dist.getKilometre() != null) {
+                                                d = dist.getKilometre();
+                                            } else {
+                                                dist = dr.findDistance(h, current);
+                                                if (dist != null && dist.getKilometre() != null) {
+                                                    d = dist.getKilometre();
+                                                }
+                                            }
+                                        } catch (Exception e) {
+                                        }
+                                        if (d != null) {
+                                            boolean isBetter = false;
+                                            if (minDist == null || d.compareTo(minDist) < 0) {
+                                                isBetter = true;
+                                            } else if (d.compareTo(minDist) == 0) {
+                                                // même distance, comparer noms
+                                                try {
+                                                    com.example.entity.Hotel hObj = com.example.entity.Hotel.findById(h);
+                                                    String hName = hObj != null ? hObj.getLibelle() : "";
+                                                    if (nextName == null || hName.compareTo(nextName) < 0) {
+                                                        isBetter = true;
+                                                    }
+                                                } catch (Exception e) {
+                                                }
+                                            }
+                                            if (isBetter) {
+                                                minDist = d;
+                                                next = h;
+                                                try {
+                                                    com.example.entity.Hotel hObj = com.example.entity.Hotel.findById(h);
+                                                    nextName = hObj != null ? hObj.getLibelle() : "";
+                                                } catch (Exception e) {
+                                                    nextName = "";
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (next != null) {
+                                        orderedHotels.add(next);
+                                        remaining.remove(next);
+                                        current = next;
+                                    } else {
+                                        // si pas trouvé, ajouter le premier restant
+                                        if (!remaining.isEmpty()) {
+                                            next = remaining.iterator().next();
+                                            orderedHotels.add(next);
+                                            remaining.remove(next);
+                                            current = next;
+                                        }
+                                    }
+                                }
+                                for (Integer hid : orderedHotels) {
+                                    try {
+                                        com.example.entity.Hotel h = com.example.entity.Hotel.findById(hid);
+                                        if (h != null) {
+                                            trajet += " -> " + h.getLibelle();
+                                        }
+                                    } catch (Exception e) {
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                        }
+                        trajet += " -> Aéroport";
+
+                        // Construire détails réservations
+                        String details = "";
                         for (Reservation r : resList) {
+                            if (!details.isEmpty()) details += ", ";
+                            details += "#" + r.getIdReservation() + " (" + r.getNbPassager() + "p " + (r.getHotel() != null ? r.getHotel().getLibelle() : "-") + ")";
+                        }
+
+                        // Calculer départ véhicule (le plus tôt)
+                        java.sql.Timestamp vehicleDepart = null;
+                        try {
+                            for (Reservation r : resList) {
+                                java.sql.Timestamp dep = r.calculHeureDeDepart();
+                                if (dep != null) {
+                                    if (vehicleDepart == null || dep.before(vehicleDepart)) {
+                                        vehicleDepart = dep;
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                        }
                 %>
                     <tr>
                         <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
                             <strong><%= v.getReference() %></strong><br/>
                             <small><%= v.getNbPlace() %> places • <%= v.getTypeCarburant() %></small>
                         </td>
-                        <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">#<%= r.getIdReservation() %></td>
-                        <td style="padding:8px; border:1px solid #ddd; vertical-align:top; text-align:right;"><%= r.getNbPassager() %></td>
-                        <td style="padding:8px; border:1px solid #ddd; vertical-align:top;"><%= r.getHotel() != null ? r.getHotel().getLibelle() : "-" %></td>
+                        <td style="padding:8px; border:1px solid #ddd; vertical-align:top;"><%= details %></td>
+                        <td style="padding:8px; border:1px solid #ddd; vertical-align:top;"><%= trajet %></td>
                         <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
-                            <%= r.calculHeureDeDepart() != null ? timeFmt.format(r.calculHeureDeDepart()) : "-" %>
+                            <%= vehicleDepart != null ? timeFmt.format(vehicleDepart) : "-" %>
                         </td>
                         <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
                             <%= vehicleReturn != null ? timeFmt.format(vehicleReturn) : "-" %>
                         </td>
                     </tr>
                 <%      }
-                    }
                 %>
                 </tbody>
             </table>
