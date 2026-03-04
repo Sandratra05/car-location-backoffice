@@ -3,6 +3,8 @@
 <%@ page import="com.example.entity.Reservation" %>
 <%@ page import="java.util.*" %>
 <%@ page import="java.text.SimpleDateFormat" %>
+<%@ page import="java.util.Comparator" %>
+<%@ page import="java.sql.Timestamp" %>
 
 <!DOCTYPE html>
 <html>
@@ -34,9 +36,8 @@
                 <thead style="background:#1e3a5f; text-align:left;">
                     <tr>
                         <th style="padding:8px; border:1px solid #ddd;">Véhicule</th>
-                        <th style="padding:8px; border:1px solid #ddd;">Num Réservation</th>
-                        <th style="padding:8px; border:1px solid #ddd;">Nb Passagers</th>
-                        <th style="padding:8px; border:1px solid #ddd;">Hôtel</th>
+                        <th style="padding:8px; border:1px solid #ddd;">Réservations</th>
+                        <th style="padding:8px; border:1px solid #ddd;">Trajet</th>
                         <th style="padding:8px; border:1px solid #ddd;">Départ véhicule</th>
                         <th style="padding:8px; border:1px solid #ddd;">Retour aéroport</th>
                     </tr>
@@ -47,25 +48,34 @@
                         Vehicule v = (Vehicule) key;
                         List<Reservation> resList = (List<Reservation>) assignments.get(key);
                         if (resList == null || resList.isEmpty()) continue;
+
+                        // Récupérer les données préparées
+                        String trajet = (String) ((Map) request.getAttribute("routes")).get(v);
+                        Timestamp vehicleDepart = (Timestamp) ((Map) request.getAttribute("departTimes")).get(v);
+                        Timestamp vehicleReturn = (Timestamp) ((Map) request.getAttribute("returnTimes")).get(v);
+
+                        // Construire détails réservations
+                        String details = "";
                         for (Reservation r : resList) {
+                            if (!details.isEmpty()) details += ", ";
+                            details += "#" + r.getIdReservation() + " (" + r.getNbPassager() + "p " + (r.getHotel() != null ? r.getHotel().getLibelle() : "-") + ")";
+                        }
                 %>
                     <tr>
                         <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
                             <strong><%= v.getReference() %></strong><br/>
                             <small><%= v.getNbPlace() %> places • <%= v.getTypeCarburant() %></small>
                         </td>
-                        <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">#<%= r.getIdReservation() %></td>
-                        <td style="padding:8px; border:1px solid #ddd; vertical-align:top; text-align:right;"><%= r.getNbPassager() %></td>
-                        <td style="padding:8px; border:1px solid #ddd; vertical-align:top;"><%= r.getHotel() != null ? r.getHotel().getLibelle() : "-" %></td>
+                        <td style="padding:8px; border:1px solid #ddd; vertical-align:top;"><%= details %></td>
+                        <td style="padding:8px; border:1px solid #ddd; vertical-align:top;"><%= trajet %></td>
                         <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
-                            <%= r.calculHeureDeDepart() != null ? timeFmt.format(r.calculHeureDeDepart()) : "-" %>
+                            <%= vehicleDepart != null ? timeFmt.format(vehicleDepart) : "-" %>
                         </td>
                         <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
-                            <%= r.calculHeureRetour() != null ? timeFmt.format(r.calculHeureRetour()) : "-" %>
+                            <%= vehicleReturn != null ? timeFmt.format(vehicleReturn) : "-" %>
                         </td>
                     </tr>
                 <%      }
-                    }
                 %>
                 </tbody>
             </table>
