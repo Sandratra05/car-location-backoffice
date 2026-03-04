@@ -47,6 +47,17 @@
                         Vehicule v = (Vehicule) key;
                         List<Reservation> resList = (List<Reservation>) assignments.get(key);
                         if (resList == null || resList.isEmpty()) continue;
+
+                        // Calculer l'heure de retour du véhicule pour toutes ses réservations
+                        java.sql.Timestamp vehicleReturn = null;
+                        try {
+                            if (!resList.isEmpty()) {
+                                vehicleReturn = resList.get(0).calculHeureRetourTotal(resList);
+                            }
+                        } catch (Exception e) {
+                            // Ignorer les erreurs
+                        }
+
                         for (Reservation r : resList) {
                 %>
                     <tr>
@@ -61,7 +72,7 @@
                             <%= r.calculHeureDeDepart() != null ? timeFmt.format(r.calculHeureDeDepart()) : "-" %>
                         </td>
                         <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
-                            <%= r.calculHeureRetour() != null ? timeFmt.format(r.calculHeureRetour()) : "-" %>
+                            <%= vehicleReturn != null ? timeFmt.format(vehicleReturn) : "-" %>
                         </td>
                     </tr>
                 <%      }

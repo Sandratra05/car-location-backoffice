@@ -7,7 +7,7 @@ Todo Sprint 4 :
     d'abord les reservations par capacité, ensuite assigner les resa avec la plus grande capacité 
 -Finoana (OK) Ajout de fonction : calculTotalDistance (Reservation) => Calculer la distance totale que le
     vehicule va parcourir (distance totale = aéroport + hotel1 + hotel2 + ... )
-- ( ) Ajout de fonction : calculHeureRetourTotal( List<Reservation> ) => calculer le temps total qu'un vehicule
+-Sariaka (OK) Ajout de fonction : calculHeureRetourTotal( List<Reservation> ) => calculer le temps total qu'un vehicule
     fait le trajet en entier
-- ( ) Modification de la page plannig-result.jsp : appeler la fonction ci-dessus pour afficher l'heure de retour
+-Sariaka (OK) Modification de la page plannig-result.jsp : appeler la fonction ci-dessus pour afficher l'heure de retour
     du vehicule à l'aéroport

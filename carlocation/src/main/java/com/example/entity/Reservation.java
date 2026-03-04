@@ -7,8 +7,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 import com.example.repository.DistanceRepository;
 import java.util.Optional;
+import com.example.service.VehiculeService;
 
 public class Reservation {
 
@@ -236,5 +239,58 @@ public class Reservation {
         long totalTravelMs = travelMsOneWay * 2L; // there and back
 
         return new Timestamp(depart.getTime() + totalTravelMs);
+    }
+
+    public Timestamp calculHeureRetourTotal(List<Reservation> resa) throws SQLException {
+        if (resa == null || resa.isEmpty()) return null;
+
+        // Trouver l'heure d'arrivée la plus tôt parmi les réservations
+        Timestamp earliestArrival = null;
+        for (Reservation r : resa) {
+            if (r.getDateHeureArrivee() != null) {
+                if (earliestArrival == null || r.getDateHeureArrivee().before(earliestArrival)) {
+                    earliestArrival = r.getDateHeureArrivee();
+                }
+            }
+        }
+        if (earliestArrival == null) return null;
+
+        // Créer une réservation temporaire pour calculer l'heure de départ
+        Reservation temp = new Reservation();
+        temp.setDateHeureArrivee(earliestArrival);
+
+        ParametreRepository prefRepo = new ParametreRepository();
+        Parametre p = prefRepo.findLatest();
+        Timestamp depart = temp.calculHeureDeDepart(p);
+
+        // Calculer la distance totale en utilisant VehiculeService
+        VehiculeService vs = new VehiculeService();
+        BigDecimal totalKm = vs.calculTotalDistance(resa);
+
+        if (totalKm == null || totalKm.compareTo(BigDecimal.ZERO) <= 0) return depart;
+
+        if (p == null || p.getVitesseMoyenneKmh() == null) return depart;
+
+        BigDecimal vitesse = p.getVitesseMoyenneKmh();
+        if (vitesse.compareTo(BigDecimal.ZERO) <= 0) return depart;
+
+        // Temps en heures = km / vitesse
+        // double hours = totalKm.divide(vitesse, 6, BigDecimal.ROUND_HALF_UP).doubleValue();
+        // long travelMs = (long) (hours * 3600.0 * 1000.0);
+        // long travelMs = Math.round(hours * 3600.0 * 1000.0);
+        BigDecimal seconds = totalKm
+                .divide(vitesse, 6, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(3600));
+
+        long travelMs = seconds
+                .multiply(BigDecimal.valueOf(1000))
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValue();
+
+        // Arrondir au minute le plus proche
+        long travelMinutes = Math.round(travelMs / 60000.0);
+        long travelMsRounded = travelMinutes * 60000;
+
+        return new Timestamp(depart.getTime() + travelMsRounded);
     }
 }
