@@ -7,6 +7,7 @@ import com.example.enums.TypeCarburant;
 import com.example.repository.VehiculeRepository;
 
 import java.util.Map;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -18,6 +19,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
+
+import com.example.entity.Distance;
+import com.example.entity.Hotel;
+import com.example.repository.DistanceRepository;
 
 public class VehiculeService {
     
@@ -111,29 +116,27 @@ public class VehiculeService {
         }
     }
 
+   
+
     public Map<Vehicule, List<Reservation>> assignVehiculeToReservation(List<Reservation> reservations) throws SQLException {
         if (reservations == null || reservations.isEmpty()) {
             return new HashMap<>();
         }
 
-        // Assume all reservations are for the same date
         List<Vehicule> allVehicules = getAllVehicules();
 
         Map<Vehicule, List<Reservation>> assignments = new HashMap<>();
-        // remaining capacity per vehicle (initially full capacity)
         Map<Vehicule, Integer> remaining = new HashMap<>();
         for (Vehicule v : allVehicules) {
             remaining.put(v, v.getNbPlace());
         }
 
-        // Sort reservations by arrival time ascending: first incoming passengers are boarded first
+        //  Trier les réservations par nb passagers DÉCROISSANT
+        // Les plus gros groupes sont assignés en premier (plus difficile à placer)
         reservations.sort((a, b) -> {
-            Timestamp ta = a.getDateHeureArrivee();
-            Timestamp tb = b.getDateHeureArrivee();
-            if (ta == null && tb == null) return 0;
-            if (ta == null) return 1;
-            if (tb == null) return -1;
-            return ta.compareTo(tb);
+            int na = a.getNbPassager() != null ? a.getNbPassager() : 0;
+            int nb = b.getNbPassager() != null ? b.getNbPassager() : 0;
+            return nb - na; // Décroissant : le plus grand en premier
         });
 
         for (Reservation resa : reservations) {
@@ -150,14 +153,12 @@ public class VehiculeService {
             }
 
             if (!assignedCandidates.isEmpty()) {
-                // pick the best fit among assigned vehicles: minimal remaining capacity >= needed
                 int bestRem = Integer.MAX_VALUE;
                 for (Vehicule v : assignedCandidates) {
                     int rem = remaining.get(v);
                     if (rem < bestRem) bestRem = rem;
                 }
 
-                // collect those with bestRem and prefer DIESEL
                 Vehicule dieselCandidate = null;
                 for (Vehicule v : assignedCandidates) {
                     if (remaining.get(v) == bestRem) {
@@ -177,20 +178,16 @@ public class VehiculeService {
             }
 
             // 2) Otherwise, pick among unused or not-yet-filled vehicles
-            // Find minimal vehicle capacity that can carry the reservation (consider full capacity for unassigned)
             int capacityMin = Integer.MAX_VALUE;
             for (Vehicule v : allVehicules) {
                 int cap = v.getNbPlace();
-                // consider current remaining (could be full for unassigned)
                 int rem = remaining.getOrDefault(v, cap);
-                // only consider vehicles that can carry the whole reservation in one go
                 if (rem >= needed && cap < capacityMin) {
                     capacityMin = cap;
                 }
             }
 
             if (capacityMin == Integer.MAX_VALUE) {
-                // no vehicle can carry this reservation entirely
                 continue;
             }
 
@@ -205,7 +202,6 @@ public class VehiculeService {
                 continue;
             }
 
-            // prefer DIESEL among candidates
             Vehicule diesel = null;
             for (Vehicule c : candidates) {
                 if (c.getTypeCarburant() == TypeCarburant.DIESEL) {
@@ -217,12 +213,12 @@ public class VehiculeService {
 
             assignments.computeIfAbsent(chosen, k -> new ArrayList<>()).add(resa);
             remaining.put(chosen, remaining.getOrDefault(chosen, chosen.getNbPlace()) - needed);
-            // in-memory only: do not persist to DB
         }
 
         return assignments;
     }
 
+// ...existing code...
     /**
      * Planification principale pour une date :
      * - récupère les réservations du jour
@@ -264,6 +260,111 @@ public class VehiculeService {
         }
 
         return result;
+    }
+
+    /**
+    
+     * 
+     * Les hôtels sont triés par distance depuis l'aéroport (plus proche d'abord).
+     * La distance est cherchée dans les 2 sens (from→to et to→from).
+     * 
+     * @param reservations Liste des réservations assignées à un véhicule
+     * @return La distance totale en km (BigDecimal)
+     * @throws SQLException En cas d'erreur de base de données
+     */
+    public BigDecimal calculTotalDistance(List<Reservation> reservations) throws SQLException {
+        if (reservations == null || reservations.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        DistanceRepository distanceRepo = new DistanceRepository();
+
+        // 1. Trouver l'aéroport (hotel avec aeroport = true)
+        Integer aeroportId = null;
+        for (Hotel h : Hotel.findAll()) {
+            if (Boolean.TRUE.equals(h.getAeroport())) {
+                aeroportId = h.getIdHotel();
+                break;
+            }
+        }
+        if (aeroportId == null) {
+            throw new SQLException("Aucun aéroport trouvé dans la table hotel");
+        }
+
+        // 2. Récupérer les hôtels uniques des réservations
+        List<Integer> hotelIds = new ArrayList<>();
+        Set<Integer> hotelIdSet = new HashSet<>();
+        for (Reservation resa : reservations) {
+            if (resa.getHotel() != null) {
+                int hotelId = resa.getHotel().getIdHotel();
+                if (!hotelIdSet.contains(hotelId)) {
+                    hotelIdSet.add(hotelId);
+                    hotelIds.add(hotelId);
+                }
+            }
+        }
+
+        if (hotelIds.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        // 3. Trier les hôtels par distance depuis l'aéroport (plus proche d'abord)
+        final Integer aeroportIdFinal = aeroportId;
+        hotelIds.sort((h1, h2) -> {
+            try {
+                BigDecimal d1 = getDistanceKm(distanceRepo, aeroportIdFinal, h1);
+                BigDecimal d2 = getDistanceKm(distanceRepo, aeroportIdFinal, h2);
+                return d1.compareTo(d2);
+            } catch (SQLException e) {
+                return 0;
+            }
+        });
+
+        // 4. Calculer la distance totale : Aéroport → Hôtel1 → Hôtel2 → ... → Aéroport
+        BigDecimal totalDistance = BigDecimal.ZERO;
+
+        // Aéroport → Premier hôtel
+        totalDistance = totalDistance.add(getDistanceKm(distanceRepo, aeroportId, hotelIds.get(0)));
+
+        // Hôtel1 → Hôtel2 → ... → Dernier hôtel
+        for (int i = 0; i < hotelIds.size() - 1; i++) {
+            totalDistance = totalDistance.add(getDistanceKm(distanceRepo, hotelIds.get(i), hotelIds.get(i + 1)));
+        }
+
+        // Dernier hôtel → Aéroport
+        totalDistance = totalDistance.add(getDistanceKm(distanceRepo, hotelIds.get(hotelIds.size() - 1), aeroportId));
+
+        return totalDistance;
+    }
+
+    /**
+     * Récupère la distance en km entre 2 hôtels.
+     * Cherche dans les 2 sens : from→to puis to→from.
+     * 
+     * @param distanceRepo Le repository Distance
+     * @param fromHotelId Hôtel de départ
+     * @param toHotelId Hôtel d'arrivée
+     * @return Distance en km (BigDecimal)
+     * @throws SQLException Si distance non trouvée
+     */
+    private BigDecimal getDistanceKm(DistanceRepository distanceRepo, int fromHotelId, int toHotelId) throws SQLException {
+        if (fromHotelId == toHotelId) {
+            return BigDecimal.ZERO;
+        }
+
+        // Chercher dans le sens from → to
+        Distance d = distanceRepo.findDistance(fromHotelId, toHotelId);
+        if (d != null && d.getKilometre() != null) {
+            return d.getKilometre();
+        }
+
+        // Chercher dans le sens inverse to → from
+        d = distanceRepo.findDistance(toHotelId, fromHotelId);
+        if (d != null && d.getKilometre() != null) {
+            return d.getKilometre();
+        }
+
+        throw new SQLException("Distance non trouvée entre hotel " + fromHotelId + " et hotel " + toHotelId);
     }
 
 }
