@@ -1,206 +1,186 @@
 package com.example.controllers;
 
-import com.example.dto.VehiculeDTO;
 import com.example.entity.Vehicule;
 import com.example.enums.TypeCarburant;
 import com.example.service.VehiculeService;
-import com.example.service.TokenService;
 import mg.ririnina.annotations.*;
+import mg.ririnina.view.ModelView;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @Controller
 public class VehiculeController {
-    
+
     private final VehiculeService vehiculeService;
-    private final TokenService tokenService;
 
     public VehiculeController() {
         this.vehiculeService = new VehiculeService();
-        this.tokenService = new TokenService();
     }
 
+    // ========== LISTE ==========
+
     /**
-     * GET /api/vehicules - Liste tous les véhicules
+     * GET /vehicules - Page liste des véhicules
      */
-    @GetMapping("/api/vehicules")
-    @JsonResponse
-    public Map<String, Object> getAllVehicules(@RequestParam("token") String token) {
+    @GetMapping("/vehicules")
+    public ModelView listVehicules() {
+        ModelView mv = new ModelView();
+        mv.setView("/vehicule/list.jsp");
+        mv.addAttribute("title", "Liste des Véhicules");
         try {
-            if (!isTokenValid(token)) {
-                return createErrorResponse("Token invalide ou expiré", 401);
-            }
-            
             List<Vehicule> vehicules = vehiculeService.getAllVehicules();
-            List<VehiculeDTO> vehiculeDTOs = vehicules.stream()
-                .map(VehiculeDTO::new)
-                .collect(Collectors.toList());
-            
-            return createSuccessResponse(vehiculeDTOs);
+            mv.addAttribute("vehicules", vehicules);
+            mv.addAttribute("title", "Liste des Véhicules");
         } catch (Exception e) {
-            e.printStackTrace();
-            return createErrorResponse("Erreur: " + e.getMessage(), 500);
+            mv.addAttribute("error", "Erreur lors du chargement : " + e.getMessage());
         }
+        return mv;
     }
 
     /**
-     * GET /api/vehicules/{id} - Récupère un véhicule par ID
+     * GET /vehicules/new - Formulaire création
      */
-    @GetMapping("/api/vehicules/{id}")
-    @JsonResponse
-    public Map<String, Object> getVehiculeById(String id, @RequestParam("token") String token) {
+    @GetMapping("/vehicules/new")
+    public ModelView newVehiculeForm() {
+        ModelView mv = new ModelView();
+        mv.setView("/vehicule/form.jsp");
+        mv.addAttribute("title", "Nouveau Véhicule");
+        mv.addAttribute("vehicule", null);
+        mv.addAttribute("typeCarburants", TypeCarburant.values());
+        return mv;
+    }
+
+    /**
+     * POST /vehicules/create - Enregistre un nouveau véhicule
+     */
+    @PostMapping("/vehicules/create")
+    public ModelView createVehicule(
+            @RequestParam("reference") String reference,
+            @RequestParam("nbPlace") String nbPlace,
+            @RequestParam("typeCarburant") String typeCarburant) {
+        ModelView mv = new ModelView();
         try {
-            if (!isTokenValid(token)) {
-                return createErrorResponse("Token invalide ou expiré", 401);
-            }
-            
+            int places = Integer.parseInt(nbPlace);
+            TypeCarburant type = TypeCarburant.valueOf(typeCarburant.toUpperCase());
+
+            Vehicule vehicule = new Vehicule();
+            vehicule.setReference(reference);
+            vehicule.setNbPlace(places);
+            vehicule.setTypeCarburant(type);
+
+            vehiculeService.createVehicule(vehicule);
+
+            // Retourner la liste avec message succès
+            List<Vehicule> vehicules = vehiculeService.getAllVehicules();
+            mv.setView("/vehicule/list.jsp");
+            mv.addAttribute("vehicules", vehicules);
+            mv.addAttribute("title", "Liste des Véhicules");
+            mv.addAttribute("success", "Véhicule créé avec succès !");
+        } catch (NumberFormatException e) {
+            mv.setView("/vehicule/form.jsp");
+            mv.addAttribute("title", "Nouveau Véhicule");
+            mv.addAttribute("typeCarburants", TypeCarburant.values());
+            mv.addAttribute("error", "Nombre de places invalide");
+        } catch (IllegalArgumentException e) {
+            mv.setView("/vehicule/form.jsp");
+            mv.addAttribute("title", "Nouveau Véhicule");
+            mv.addAttribute("typeCarburants", TypeCarburant.values());
+            mv.addAttribute("error", "Erreur de validation : " + e.getMessage());
+        } catch (Exception e) {
+            mv.setView("/vehicule/form.jsp");
+            mv.addAttribute("title", "Nouveau Véhicule");
+            mv.addAttribute("typeCarburants", TypeCarburant.values());
+            mv.addAttribute("error", "Erreur : " + e.getMessage());
+        }
+        return mv;
+    }
+
+    /**
+     * GET /vehicules/edit?id={id} - Formulaire modification
+     */
+    @GetMapping("/vehicules/edit")
+    public ModelView editVehiculeForm(@RequestParam("id") String id) {
+        ModelView mv = new ModelView();
+        mv.setView("/vehicule/form.jsp");
+        mv.addAttribute("title", "Modifier le Véhicule");
+        mv.addAttribute("typeCarburants", TypeCarburant.values());
+        try {
             Long vehiculeId = Long.parseLong(id);
             Vehicule vehicule = vehiculeService.getVehiculeById(vehiculeId);
-            VehiculeDTO dto = new VehiculeDTO(vehicule);
-            
-            return createSuccessResponse(dto);
-        } catch (NumberFormatException e) {
-            return createErrorResponse("ID invalide: " + id, 400);
-        } catch (IllegalArgumentException e) {
-            return createErrorResponse(e.getMessage(), 404);
+            mv.addAttribute("vehicule", vehicule);
         } catch (Exception e) {
-            e.printStackTrace();
-            return createErrorResponse("Erreur: " + e.getMessage(), 500);
+            mv.addAttribute("error", "Véhicule introuvable : " + e.getMessage());
         }
+        return mv;
     }
 
     /**
-     * POST /api/vehicules/create - Crée un nouveau véhicule
+     * POST /vehicules/update - Enregistre la modification
      */
-    @PostMapping("/api/vehicules/create")
-    @JsonResponse
-    public Map<String, Object> createVehicule(
+    @PostMapping("/vehicules/update")
+    public ModelView updateVehicule(
+            @RequestParam("id") String id,
             @RequestParam("reference") String reference,
             @RequestParam("nbPlace") String nbPlace,
-            @RequestParam("typeCarburant") String typeCarburant,
-            @RequestParam("token") String token) {
+            @RequestParam("typeCarburant") String typeCarburant) {
+        ModelView mv = new ModelView();
         try {
-            if (!isTokenValid(token)) {
-                return createErrorResponse("Token invalide ou expiré", 401);
-            }
-            
-            int places = Integer.parseInt(nbPlace);
-            TypeCarburant type = TypeCarburant.valueOf(typeCarburant.toUpperCase());
-            
-            Vehicule vehicule = new Vehicule();
-            vehicule.setReference(reference);
-            vehicule.setNbPlace(places);
-            vehicule.setTypeCarburant(type);
-
-            Vehicule created = vehiculeService.createVehicule(vehicule);
-            VehiculeDTO dto = new VehiculeDTO(created);
-            
-            return createSuccessResponse(dto, "Véhicule créé avec succès");
-        } catch (NumberFormatException e) {
-            return createErrorResponse("Nombre de places invalide", 400);
-        } catch (IllegalArgumentException e) {
-            return createErrorResponse("Validation: " + e.getMessage(), 400);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return createErrorResponse("Erreur: " + e.getMessage(), 500);
-        }
-    }
-
-    /**
-     * POST /api/vehicules/{id}/update - Met à jour un véhicule
-     */
-    @PostMapping("/api/vehicules/{id}/update")
-    @JsonResponse
-    public Map<String, Object> updateVehicule(
-            String id,
-            @RequestParam("reference") String reference,
-            @RequestParam("nbPlace") String nbPlace,
-            @RequestParam("typeCarburant") String typeCarburant,
-            @RequestParam("token") String token) {
-        try {
-            if (!isTokenValid(token)) {
-                return createErrorResponse("Token invalide ou expiré", 401);
-            }
-            
             Long vehiculeId = Long.parseLong(id);
             int places = Integer.parseInt(nbPlace);
             TypeCarburant type = TypeCarburant.valueOf(typeCarburant.toUpperCase());
-            
+
             Vehicule vehicule = new Vehicule();
             vehicule.setReference(reference);
             vehicule.setNbPlace(places);
             vehicule.setTypeCarburant(type);
 
-            Vehicule updated = vehiculeService.updateVehicule(vehiculeId, vehicule);
-            VehiculeDTO dto = new VehiculeDTO(updated);
-            
-            return createSuccessResponse(dto, "Véhicule mis à jour avec succès");
+            vehiculeService.updateVehicule(vehiculeId, vehicule);
+
+            List<Vehicule> vehicules = vehiculeService.getAllVehicules();
+            mv.setView("/vehicule/list.jsp");
+            mv.addAttribute("vehicules", vehicules);
+            mv.addAttribute("title", "Liste des Véhicules");
+            mv.addAttribute("success", "Véhicule mis à jour avec succès !");
         } catch (NumberFormatException e) {
-            return createErrorResponse("ID ou nombre de places invalide", 400);
+            mv.setView("/vehicule/form.jsp");
+            mv.addAttribute("title", "Modifier le Véhicule");
+            mv.addAttribute("typeCarburants", TypeCarburant.values());
+            mv.addAttribute("error", "ID ou nombre de places invalide");
         } catch (IllegalArgumentException e) {
-            return createErrorResponse(e.getMessage(), 404);
+            mv.setView("/vehicule/form.jsp");
+            mv.addAttribute("title", "Modifier le Véhicule");
+            mv.addAttribute("typeCarburants", TypeCarburant.values());
+            mv.addAttribute("error", e.getMessage());
         } catch (Exception e) {
-            e.printStackTrace();
-            return createErrorResponse("Erreur: " + e.getMessage(), 500);
+            mv.setView("/vehicule/form.jsp");
+            mv.addAttribute("title", "Modifier le Véhicule");
+            mv.addAttribute("typeCarburants", TypeCarburant.values());
+            mv.addAttribute("error", "Erreur : " + e.getMessage());
         }
+        return mv;
     }
 
     /**
-     * GET /api/vehicules/{id}/delete - Supprime un véhicule
+     * GET /vehicules/delete?id={id} - Supprime un véhicule
      */
-    @GetMapping("/api/vehicules/{id}/delete")
-    @JsonResponse
-    public Map<String, Object> deleteVehicule(String id, @RequestParam("token") String token) {
+    @GetMapping("/vehicules/delete")
+    public ModelView deleteVehicule(@RequestParam("id") String id) {
+        ModelView mv = new ModelView();
+        mv.setView("/vehicule/list.jsp");
+        mv.addAttribute("title", "Liste des Véhicules");
         try {
-            if (!isTokenValid(token)) {
-                return createErrorResponse("Token invalide ou expiré", 401);
-            }
-            
             Long vehiculeId = Long.parseLong(id);
             vehiculeService.deleteVehicule(vehiculeId);
-            
-            return createSuccessResponse(null, "Véhicule supprimé avec succès");
-        } catch (NumberFormatException e) {
-            return createErrorResponse("ID invalide: " + id, 400);
+
+            List<Vehicule> vehicules = vehiculeService.getAllVehicules();
+            mv.addAttribute("vehicules", vehicules);
+            mv.addAttribute("success", "Véhicule supprimé avec succès !");
         } catch (IllegalArgumentException e) {
-            return createErrorResponse(e.getMessage(), 404);
+            mv.addAttribute("error", e.getMessage());
         } catch (Exception e) {
-            e.printStackTrace();
-            return createErrorResponse("Erreur: " + e.getMessage(), 500);
+            mv.addAttribute("error", "Erreur lors de la suppression : " + e.getMessage());
         }
-    }
-
-    // ========== HELPERS ==========
-
-    private boolean isTokenValid(String token) {
-        try {
-            return tokenService.validateToken(token);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private Map<String, Object> createSuccessResponse(Object data) {
-        return createSuccessResponse(data, "Succès");
-    }
-
-    private Map<String, Object> createSuccessResponse(Object data, String message) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", message);
-        response.put("data", data);
-        return response;
-    }
-
-    private Map<String, Object> createErrorResponse(String message, int code) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", false);
-        response.put("message", message);
-        response.put("code", code);
-        response.put("data", null);
-        return response;
+        return mv;
     }
 }
+
