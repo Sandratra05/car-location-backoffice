@@ -51,6 +51,15 @@ public class ReservationController {
             Map<Vehicule, List<Reservation>> assignments = vs.assignVehiculeToReservation(reservations);
             List<Reservation> unassigned = vs.findUnassignedReservations(reservations, assignments);
 
+            // Calculer l'heure de départ commune à TOUS les véhicules (règle sprint 5 : TA)
+            // = heure d'arrivée du dernier vol compris dans la fenêtre TA depuis la 1ère réservation
+            Timestamp premierVol = reservations.get(0).getDateHeureArrivee();
+            Timestamp heureDepart = Reservation.getHeureDepartAvecTA(premierVol);
+            // Si getHeureDepartAvecTA retourne null (pas de réservation dans la fenêtre), fallback
+            if (heureDepart == null) {
+                heureDepart = premierVol;
+            }
+
             // Préparer les données supplémentaires pour l'affichage
             Map<Vehicule, String> routes = new HashMap<>();
             Map<Vehicule, Timestamp> departTimes = new HashMap<>();
@@ -75,16 +84,8 @@ public class ReservationController {
                     kmMap.put(v, java.math.BigDecimal.ZERO);
                 }
 
-                Timestamp earliestDepart = null;
-                for (Reservation r : resas) {
-                    try {
-                        Timestamp dep = r.calculHeureDeDepart();
-                        if (dep != null && (earliestDepart == null || dep.before(earliestDepart))) {
-                            earliestDepart = dep;
-                        }
-                    } catch (Exception e) {}
-                }
-                departTimes.put(v, earliestDepart);
+                // Même heure de départ pour tous les véhicules (sprint 5 : TA)
+                departTimes.put(v, heureDepart);
 
                 Timestamp ret = null;
                 try {
