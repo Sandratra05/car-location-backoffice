@@ -36,7 +36,7 @@ public class DbConnection {
             // Format local ou JDBC direct
             this.jdbcUrl = getEnvOrDefault("DATABASE_URL", "jdbc:postgresql://localhost:5432/voitures");
             this.username = getEnvOrDefault("DATABASE_USERNAME", "postgres");
-            this.password = getEnvOrDefault("DATABASE_PASSWORD", "postgres");
+            this.password = getEnvOrDefault("DATABASE_PASSWORD", "admin");
         }
     }
 

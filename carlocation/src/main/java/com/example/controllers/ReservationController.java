@@ -55,6 +55,7 @@ public class ReservationController {
             Map<Vehicule, String> routes = new HashMap<>();
             Map<Vehicule, Timestamp> departTimes = new HashMap<>();
             Map<Vehicule, Timestamp> returnTimes = new HashMap<>();
+            Map<Vehicule, java.math.BigDecimal> kmMap = new HashMap<>();
 
             for (Map.Entry<Vehicule, List<Reservation>> entry : assignments.entrySet()) {
                 Vehicule v = entry.getKey();
@@ -65,6 +66,13 @@ public class ReservationController {
                     routes.put(v, route);
                 } catch (Exception e) {
                     routes.put(v, "Aéroport -> Aéroport");
+                }
+
+                try {
+                    java.math.BigDecimal km = vs.calculTotalDistance(resas);
+                    kmMap.put(v, km);
+                } catch (Exception e) {
+                    kmMap.put(v, java.math.BigDecimal.ZERO);
                 }
 
                 Timestamp earliestDepart = null;
@@ -93,6 +101,7 @@ public class ReservationController {
             mv.addAttribute("routes", routes);
             mv.addAttribute("departTimes", departTimes);
             mv.addAttribute("returnTimes", returnTimes);
+            mv.addAttribute("kmMap", kmMap);
         } catch (Exception e) {
             mv.setView("planning-form.jsp");
             mv.addAttribute("error", "Erreur lors de la génération du planning: " + e.getMessage());
