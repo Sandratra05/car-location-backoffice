@@ -133,77 +133,80 @@ public class VehiculeService {
             remaining.put(v, v.getNbPlace());
         }
 
-        //  Trier les réservations par nb passagers DÉCROISSANT
-        // Les plus gros groupes sont assignés en premier (plus difficile à placer)
-        reservations.sort((a, b) -> {
+        // Nouvelle logique : prendre la plus grande réservation non assignée,
+        // l'assigner au véhicule le plus adapté (best-fit : plus petite capacité qui peut contenir la resa),
+        // puis essayer de remplir ce même véhicule avec les plus grandes réservations restantes qui entrent.
+        List<Reservation> unassigned = new ArrayList<>(reservations);
+        // Trier décroissant par nombre de passagers
+        unassigned.sort((a, b) -> {
             int na = a.getNbPassager() != null ? a.getNbPassager() : 0;
             int nb = b.getNbPassager() != null ? b.getNbPassager() : 0;
-            return nb - na; // Décroissant : le plus grand en premier
+            return Integer.compare(nb, na);
         });
 
-        for (Reservation resa : reservations) {
-            int needed = resa.getNbPassager() != null ? resa.getNbPassager() : 0;
-            if (needed <= 0) continue;
-
-            Vehicule chosen = null;
-
-            // 1) Try to fit into already assigned vehicles (fill current vehicles first)
-            List<Vehicule> assignedCandidates = new ArrayList<>();
-            for (Vehicule v : assignments.keySet()) {
-                Integer rem = remaining.getOrDefault(v, v.getNbPlace());
-                if (rem >= needed) assignedCandidates.add(v);
+        while (!unassigned.isEmpty()) {
+            Reservation current = unassigned.get(0);
+            int needed = current.getNbPassager() != null ? current.getNbPassager() : 0;
+            if (needed <= 0) {
+                unassigned.remove(0);
+                continue;
             }
 
-            if (!assignedCandidates.isEmpty()) {
-                int bestRem = Integer.MAX_VALUE;
-                for (Vehicule v : assignedCandidates) {
-                    int rem = remaining.get(v);
-                    if (rem < bestRem) bestRem = rem;
-                }
-
-                List<Vehicule> bestCandidates = new ArrayList<>();
-                for (Vehicule v : assignedCandidates) {
-                    if (remaining.get(v) == bestRem) {
-                        bestCandidates.add(v);
+            // Best-fit : choisir le véhicule avec la plus petite capacité totale qui puisse contenir la resa
+            Vehicule chosen = null;
+            int bestCap = Integer.MAX_VALUE;
+            for (Vehicule v : allVehicules) {
+                int rem = remaining.getOrDefault(v, v.getNbPlace());
+                if (rem >= needed) {
+                    int cap = v.getNbPlace();
+                    if (cap < bestCap) {
+                        bestCap = cap;
+                        chosen = v;
+                    } else if (cap == bestCap) {
+                        // si même capacité, utiliser la priorisation carburant existante
+                        if (chosen != null) {
+                            List<Vehicule> tie = new ArrayList<>();
+                            tie.add(chosen);
+                            tie.add(v);
+                            chosen = chooseFromCandidates(tie);
+                        } else {
+                            chosen = v;
+                        }
                     }
                 }
-                chosen = chooseFromCandidates(bestCandidates);
-                if (chosen != null) {
-                    assignments.get(chosen).add(resa);
-                    remaining.put(chosen, remaining.get(chosen) - needed);
-                    continue;
-                }
             }
 
-            // 2) Otherwise, pick among unused or not-yet-filled vehicles
-            int capacityMin = Integer.MAX_VALUE;
-            for (Vehicule v : allVehicules) {
-                int cap = v.getNbPlace();
-                int rem = remaining.getOrDefault(v, cap);
-                if (rem >= needed && cap < capacityMin) {
-                    capacityMin = cap;
-                }
-            }
-
-            if (capacityMin == Integer.MAX_VALUE) {
+            if (chosen == null) {
+                // Aucune voiture ne peut contenir cette réservation -> la laisser non assignée et la retirer
+                unassigned.remove(0);
                 continue;
             }
 
-            List<Vehicule> candidates = new ArrayList<>();
-            for (Vehicule v : allVehicules) {
-                if (v.getNbPlace() == capacityMin && remaining.getOrDefault(v, v.getNbPlace()) >= needed) {
-                    candidates.add(v);
+            // Assigner la réservation courante
+            assignments.computeIfAbsent(chosen, k -> new ArrayList<>()).add(current);
+            remaining.put(chosen, remaining.get(chosen) - needed);
+            unassigned.remove(0);
+
+            // Remplir autant que possible ce véhicule avec les plus grandes réservations restantes
+            boolean assignedMore = true;
+            while (assignedMore) {
+                assignedMore = false;
+                int remCap = remaining.get(chosen);
+                if (remCap <= 0) break;
+
+                // trouver la plus grande réservation restante qui rentre dans remCap
+                for (int i = 0; i < unassigned.size(); i++) {
+                    Reservation cand = unassigned.get(i);
+                    int n = cand.getNbPassager() != null ? cand.getNbPassager() : 0;
+                    if (n > 0 && n <= remCap) {
+                        assignments.get(chosen).add(cand);
+                        remaining.put(chosen, remCap - n);
+                        unassigned.remove(i);
+                        assignedMore = true;
+                        break; // recommencer pour chercher la prochaine plus grande qui rentre
+                    }
                 }
             }
-
-            if (candidates.isEmpty()) {
-                continue;
-            }
-
-            chosen = chooseFromCandidates(candidates);
-
-            assignments.computeIfAbsent(chosen, k -> new ArrayList<>()).add(resa);
-            remaining.put(chosen, remaining.getOrDefault(chosen, chosen.getNbPlace()) - needed);
         }
 
         return assignments;
