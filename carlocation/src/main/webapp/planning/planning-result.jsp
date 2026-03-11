@@ -4,6 +4,7 @@
 <%@ page import="java.util.*" %>
 <%@ page import="java.text.SimpleDateFormat" %>
 <%@ page import="java.util.Comparator" %>
+<%@ page import="java.math.BigDecimal" %>
 <%@ page import="java.sql.Timestamp" %>
 
 <!DOCTYPE html>
@@ -38,6 +39,7 @@
                         <th style="padding:8px; border:1px solid #ddd;">Véhicule</th>
                         <th style="padding:8px; border:1px solid #ddd;">Réservations</th>
                         <th style="padding:8px; border:1px solid #ddd;">Trajet</th>
+                        <th style="padding:8px; border:1px solid #ddd;">Km parcouru</th>
                         <th style="padding:8px; border:1px solid #ddd;">Départ véhicule</th>
                         <th style="padding:8px; border:1px solid #ddd;">Retour aéroport</th>
                     </tr>
@@ -53,6 +55,7 @@
                         String trajet = (String) ((Map) request.getAttribute("routes")).get(v);
                         Timestamp vehicleDepart = (Timestamp) ((Map) request.getAttribute("departTimes")).get(v);
                         Timestamp vehicleReturn = (Timestamp) ((Map) request.getAttribute("returnTimes")).get(v);
+                        BigDecimal km = (BigDecimal) ((Map) request.getAttribute("kmMap")).get(v);
 
                         // Construire détails réservations
                         String details = "";
@@ -68,6 +71,9 @@
                         </td>
                         <td style="padding:8px; border:1px solid #ddd; vertical-align:top;"><%= details %></td>
                         <td style="padding:8px; border:1px solid #ddd; vertical-align:top;"><%= trajet %></td>
+                        <td style="padding:8px; border:1px solid #ddd; vertical-align:top; text-align:right;">
+                            <%= km != null ? km.setScale(2, java.math.RoundingMode.HALF_UP) + " km" : "-" %>
+                        </td>
                         <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
                             <%= vehicleDepart != null ? timeFmt.format(vehicleDepart) : "-" %>
                         </td>
