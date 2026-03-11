@@ -41,7 +41,9 @@ public class ReservationController {
         try {
             Timestamp ts = Timestamp.valueOf(date.replace("T", " ") + ":00");
             VehiculeService vs = new VehiculeService();
-            List<Reservation> reservations = Reservation.findReservationsByDate(ts);
+
+            List<Reservation> reservations = Reservation.getReservationsDansTA(ts);
+            
             if (reservations.isEmpty()) {
                 mv.setView("planning-form.jsp");
                 mv.addAttribute("error", "Aucune réservation trouvée pour la date sélectionnée.");
@@ -51,13 +53,10 @@ public class ReservationController {
             Map<Vehicule, List<Reservation>> assignments = vs.assignVehiculeToReservation(reservations);
             List<Reservation> unassigned = vs.findUnassignedReservations(reservations, assignments);
 
-            // Calculer l'heure de départ commune à TOUS les véhicules (règle sprint 5 : TA)
-            // = heure d'arrivée du dernier vol compris dans la fenêtre TA depuis la 1ère réservation
-            Timestamp premierVol = reservations.get(0).getDateHeureArrivee();
-            Timestamp heureDepart = Reservation.getHeureDepartAvecTA(premierVol);
-            // Si getHeureDepartAvecTA retourne null (pas de réservation dans la fenêtre), fallback
+            Timestamp heureDepart = Reservation.getHeureDepartAvecTA(ts);
+
             if (heureDepart == null) {
-                heureDepart = premierVol;
+                heureDepart = reservations.get(0).getDateHeureArrivee();
             }
 
             // Préparer les données supplémentaires pour l'affichage
