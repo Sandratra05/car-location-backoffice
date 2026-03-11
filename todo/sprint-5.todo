@@ -1,0 +1,26 @@
+TL : Sariaka ETU003378
+Dev Framework : Finoana ETU003203, Sandratra ETU003126
+
+Todo sprint 5 :
+
+- Finoana : Creer une nouvelle base de donnees : voitures
+    * modifier dans config/DbConnection : 
+        this.jdbcUrl = getEnvOrDefault("DATABASE_URL", "jdbc:postgresql://localhost:5432/voitures");
+    * ajouter les tables du script de reinitialisation dans la base de donnees voitures
+
+- Sandratra : Ajouter une fonction getHeureDepartAvecTA (date heure)
+    * recuperer la premiere heure de reservation apres l'argument heure : premiereHeure(date heure)
+    * recuperer la derniere heure apres TA grace a la fonction premieureHeure : derniereHeureApresTA(date Heure) :
+        # premiereHeure + TA 
+    * recuperer les reservations entre premiereHeure et derniereHeureApresTA : getReservationsDansTA (date heure)
+    * recuperer l'heure de la derniere reservation (cad heure du dernier vol compris dans getReservationsDansTA) : derniereHeure(date Heure)
+    * derniereHeure(date Heure) => getHeureDepartAvecTA(date heure)
+
+- Finoana : Modifier l'affichage de l'assignation de vehicules
+tableau avec les colonnes :
+    * heure depart
+    * vehicule
+    * liste reservations 
+    * km parcouru
+    * heure retour
+    * hotel
