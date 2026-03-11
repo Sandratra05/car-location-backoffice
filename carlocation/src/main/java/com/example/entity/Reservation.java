@@ -293,4 +293,103 @@ public class Reservation {
 
         return new Timestamp(depart.getTime() + travelMsRounded);
     }
+
+    /**
+     * Retourne la liste des réservations dont l'heure d'arrivée est comprise
+     * entre la date passée en argument et cette date + le temps d'attente
+     * (temps d'attente pris depuis le dernier enregistrement de la table
+     * `parametre`).
+     *
+     * @param dateHeure date de départ de la fenêtre
+     * @return liste des réservations dans la fenêtre
+     * @throws SQLException en cas d'erreur BD
+     */
+    public static List<Reservation> getReservationsDansTA(Timestamp dateHeure) throws SQLException {
+        if (dateHeure == null) throw new IllegalArgumentException("dateHeure ne peut pas être null");
+
+        ParametreRepository prefRepo = new ParametreRepository();
+        Parametre p = prefRepo.findLatest();
+        if (p == null || p.getTempsAttenteMin() == null) {
+            return new ArrayList<>();
+        }
+
+        long waitMs = TimeUnit.MINUTES.toMillis(p.getTempsAttenteMin());
+        Timestamp end = new Timestamp(dateHeure.getTime() + waitMs);
+
+        List<Reservation> list = new ArrayList<>();
+
+        String sql = """
+            SELECT r.*, h.code, h.libelle, h.aeroport
+            FROM reservation r
+            JOIN hotel h ON r.id_hotel = h.id_hotel
+            WHERE r.date_heure_arrivee BETWEEN ? AND ?
+            ORDER BY r.date_heure_arrivee
+        """;
+
+        try (Connection conn = DbConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setTimestamp(1, dateHeure);
+            stmt.setTimestamp(2, end);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Hotel hotel = new Hotel(
+                        rs.getInt("id_hotel"),
+                        rs.getString("code"),
+                        rs.getString("libelle"),
+                        rs.getBoolean("aeroport")
+                    );
+
+                    Reservation r = new Reservation();
+                    r.idReservation = rs.getInt("id_reservation");
+                    r.nbPassager = rs.getInt("nb_passager");
+                    r.dateHeureArrivee = rs.getTimestamp("date_heure_arrivee");
+                    r.hotel = hotel;
+                    r.idClient = rs.getString("id_client");
+
+                    list.add(r);
+                }
+            }
+        }
+
+        return list;
+    }
+
+    /**
+     * Calcule l'heure de départ commune de tous les véhicules pour la fenêtre
+     * commençant à `dateHeure` et se terminant à `dateHeure + temps_attente`.
+     *
+     * Algorithme:
+     * - Récupère les réservations via `getReservationsDansTA(dateHeure)`
+     * - Trie par `dateHeureArrivee` et prend la plus récente (dernière)
+     * - Si un `Parametre` existe, utilise `calculHeureDeDepart(param)` sur
+     *   cette réservation (ajoute le temps d'attente). Sinon retourne la
+     *   `dateHeureArrivee` la plus récente.
+     *
+     * @param dateHeure début de la fenêtre
+     * @return Timestamp de départ commun des véhicules, ou null si aucune réservation
+     * @throws SQLException en cas d'erreur BD
+     */
+    public static Timestamp getHeureDepartAvecTA(Timestamp dateHeure) throws SQLException {
+        if (dateHeure == null) throw new IllegalArgumentException("dateHeure ne peut pas être null");
+
+        List<Reservation> list = getReservationsDansTA(dateHeure);
+        if (list == null || list.isEmpty()) return null;
+
+        // Trier par date d'arrivée croissante et prendre la dernière (la plus récente)
+        list.sort((a, b) -> {
+            Timestamp ta = a != null ? a.getDateHeureArrivee() : null;
+            Timestamp tb = b != null ? b.getDateHeureArrivee() : null;
+            if (ta == null && tb == null) return 0;
+            if (ta == null) return -1;
+            if (tb == null) return 1;
+            return ta.compareTo(tb);
+        });
+
+        Reservation latest = list.get(list.size() - 1);
+        if (latest == null || latest.getDateHeureArrivee() == null) return null;
+
+        return latest.getDateHeureArrivee();
+    }
 }
