@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Random;
 
@@ -127,89 +128,131 @@ public class VehiculeService {
 
         List<Vehicule> allVehicules = getAllVehicules();
 
-        Map<Vehicule, List<Reservation>> assignments = new HashMap<>();
-        Map<Vehicule, Integer> remaining = new HashMap<>();
-        for (Vehicule v : allVehicules) {
-            remaining.put(v, v.getNbPlace());
+        // 1. Grouper les réservations par heure:minute:seconde exacte
+        Map<String, List<Reservation>> timeGroups = new HashMap<>();
+        for (Reservation r : reservations) {
+            String timeKey = getTimeKey(r.getDateHeureArrivee());
+            timeGroups.computeIfAbsent(timeKey, k -> new ArrayList<>()).add(r);
         }
 
-        // Nouvelle logique : prendre la plus grande réservation non assignée,
-        // l'assigner au véhicule le plus adapté (best-fit : plus petite capacité qui peut contenir la resa),
-        // puis essayer de remplir ce même véhicule avec les plus grandes réservations restantes qui entrent.
-        List<Reservation> unassigned = new ArrayList<>(reservations);
-        // Trier décroissant par nombre de passagers
-        unassigned.sort((a, b) -> {
-            int na = a.getNbPassager() != null ? a.getNbPassager() : 0;
-            int nb = b.getNbPassager() != null ? b.getNbPassager() : 0;
-            return Integer.compare(nb, na);
+        // 2. Trier chaque groupe par nombre de passagers décroissant
+        for (List<Reservation> group : timeGroups.values()) {
+            group.sort((a, b) -> {
+                int na = a.getNbPassager() != null ? a.getNbPassager() : 0;
+                int nb = b.getNbPassager() != null ? b.getNbPassager() : 0;
+                return Integer.compare(nb, na);
+            });
+        }
+
+        // 3. Trier les groupes : traiter d'abord le groupe contenant la plus grande réservation
+        List<List<Reservation>> sortedGroups = new ArrayList<>(timeGroups.values());
+        sortedGroups.sort((g1, g2) -> {
+            int max1 = g1.isEmpty() ? 0 : (g1.get(0).getNbPassager() != null ? g1.get(0).getNbPassager() : 0);
+            int max2 = g2.isEmpty() ? 0 : (g2.get(0).getNbPassager() != null ? g2.get(0).getNbPassager() : 0);
+            return Integer.compare(max2, max1);
         });
 
-        while (!unassigned.isEmpty()) {
-            Reservation current = unassigned.get(0);
-            int needed = current.getNbPassager() != null ? current.getNbPassager() : 0;
-            if (needed <= 0) {
-                unassigned.remove(0);
-                continue;
-            }
+        Map<Vehicule, List<Reservation>> assignments = new HashMap<>();
+        Set<Vehicule> usedVehicules = new HashSet<>();
 
-            // Best-fit : choisir le véhicule avec la plus petite capacité totale qui puisse contenir la resa
-            Vehicule chosen = null;
-            int bestCap = Integer.MAX_VALUE;
+        // 4. Pour chaque groupe de même heure, assigner les réservations aux véhicules
+        //    Seules les réservations ayant exactement la même heure peuvent partager un véhicule.
+        //    Un véhicule utilisé par un groupe n'est plus disponible pour un autre groupe.
+        for (List<Reservation> group : sortedGroups) {
+            // Véhicules disponibles pour ce groupe (non encore utilisés par un autre groupe)
+            List<Vehicule> availableVehicules = new ArrayList<>();
             for (Vehicule v : allVehicules) {
-                int rem = remaining.getOrDefault(v, v.getNbPlace());
-                if (rem >= needed) {
-                    int cap = v.getNbPlace();
-                    if (cap < bestCap) {
-                        bestCap = cap;
-                        chosen = v;
-                    } else if (cap == bestCap) {
-                        // si même capacité, utiliser la priorisation carburant existante
-                        if (chosen != null) {
-                            List<Vehicule> tie = new ArrayList<>();
-                            tie.add(chosen);
-                            tie.add(v);
-                            chosen = chooseFromCandidates(tie);
-                        } else {
-                            chosen = v;
-                        }
-                    }
+                if (!usedVehicules.contains(v)) {
+                    availableVehicules.add(v);
                 }
             }
 
-            if (chosen == null) {
-                // Aucune voiture ne peut contenir cette réservation -> la laisser non assignée et la retirer
-                unassigned.remove(0);
-                continue;
+            Map<Vehicule, Integer> remaining = new HashMap<>();
+            for (Vehicule v : availableVehicules) {
+                remaining.put(v, v.getNbPlace());
             }
 
-            // Assigner la réservation courante
-            assignments.computeIfAbsent(chosen, k -> new ArrayList<>()).add(current);
-            remaining.put(chosen, remaining.get(chosen) - needed);
-            unassigned.remove(0);
+            List<Reservation> unassigned = new ArrayList<>(group);
 
-            // Remplir autant que possible ce véhicule avec les plus grandes réservations restantes
-            boolean assignedMore = true;
-            while (assignedMore) {
-                assignedMore = false;
-                int remCap = remaining.get(chosen);
-                if (remCap <= 0) break;
+            while (!unassigned.isEmpty()) {
+                Reservation current = unassigned.get(0);
+                int needed = current.getNbPassager() != null ? current.getNbPassager() : 0;
+                if (needed <= 0) {
+                    unassigned.remove(0);
+                    continue;
+                }
 
-                // trouver la plus grande réservation restante qui rentre dans remCap
-                for (int i = 0; i < unassigned.size(); i++) {
-                    Reservation cand = unassigned.get(i);
-                    int n = cand.getNbPassager() != null ? cand.getNbPassager() : 0;
-                    if (n > 0 && n <= remCap) {
-                        assignments.get(chosen).add(cand);
-                        remaining.put(chosen, remCap - n);
-                        unassigned.remove(i);
-                        assignedMore = true;
-                        break; // recommencer pour chercher la prochaine plus grande qui rentre
+                // Best-fit : choisir le véhicule avec la plus petite capacité totale qui puisse contenir la resa
+                Vehicule chosen = null;
+                int bestCap = Integer.MAX_VALUE;
+                for (Vehicule v : availableVehicules) {
+                    int rem = remaining.getOrDefault(v, 0);
+                    if (rem >= needed) {
+                        int cap = v.getNbPlace();
+                        if (cap < bestCap) {
+                            bestCap = cap;
+                            chosen = v;
+                        } else if (cap == bestCap) {
+                            if (chosen != null) {
+                                List<Vehicule> tie = new ArrayList<>();
+                                tie.add(chosen);
+                                tie.add(v);
+                                chosen = chooseFromCandidates(tie);
+                            } else {
+                                chosen = v;
+                            }
+                        }
+                    }
+                }
+
+                if (chosen == null) {
+                    // Aucune voiture disponible ne peut contenir cette réservation
+                    unassigned.remove(0);
+                    continue;
+                }
+
+                // Assigner la réservation courante
+                assignments.computeIfAbsent(chosen, k -> new ArrayList<>()).add(current);
+                remaining.put(chosen, remaining.get(chosen) - needed);
+                usedVehicules.add(chosen);
+                unassigned.remove(0);
+
+                // Remplir ce véhicule avec les plus grandes réservations restantes du même groupe
+                boolean assignedMore = true;
+                while (assignedMore) {
+                    assignedMore = false;
+                    int remCap = remaining.get(chosen);
+                    if (remCap <= 0) break;
+
+                    for (int i = 0; i < unassigned.size(); i++) {
+                        Reservation cand = unassigned.get(i);
+                        int n = cand.getNbPassager() != null ? cand.getNbPassager() : 0;
+                        if (n > 0 && n <= remCap) {
+                            assignments.get(chosen).add(cand);
+                            remaining.put(chosen, remCap - n);
+                            unassigned.remove(i);
+                            assignedMore = true;
+                            break;
+                        }
                     }
                 }
             }
         }
 
         return assignments;
+    }
+
+    /**
+     * Extrait la clé de temps (HH:mm:ss) d'un Timestamp pour le regroupement.
+     */
+    private String getTimeKey(Timestamp ts) {
+        if (ts == null) return "null";
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(ts.getTime());
+        return String.format("%02d:%02d:%02d",
+            cal.get(Calendar.HOUR_OF_DAY),
+            cal.get(Calendar.MINUTE),
+            cal.get(Calendar.SECOND));
     }
 
 // ...existing code...
