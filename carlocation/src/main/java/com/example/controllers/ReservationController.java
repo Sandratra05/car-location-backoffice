@@ -49,7 +49,7 @@ public class ReservationController {
             }
 
             Map<Vehicule, List<Reservation>> assignments = vs.assignVehiculeToReservation(reservations);
-            List<Reservation> unassigned = vs.findUnassignedReservations(reservations, assignments);
+            List<Reservation> unassigned = vs.findUnassignedReservations(allReservations, assignments);
 
             // Calculer l'heure de départ commune à TOUS les véhicules (règle sprint 5 : TA)
             // = heure d'arrivée du dernier vol compris dans la fenêtre TA depuis la 1ère réservation

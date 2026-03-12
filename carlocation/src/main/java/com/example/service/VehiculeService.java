@@ -220,7 +220,7 @@ public class VehiculeService {
      */
     public Map<Vehicule, List<Reservation>> planifyByDate(Timestamp date) throws SQLException {
         if (date == null) return new HashMap<>();
-        List<Reservation> reservations = Reservation.findReservationsByDate(date);
+        List<Reservation> reservations = Reservation.findReservationsByDateASC(date);
         if (reservations.isEmpty()) {
             throw new IllegalArgumentException("Aucune réservation trouvée pour la date: " + date);
         }
