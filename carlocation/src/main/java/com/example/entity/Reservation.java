@@ -125,7 +125,7 @@ public class Reservation {
         return list;
     }
 
-    public static List<Reservation> findReservationsByDate(Timestamp date) throws SQLException {
+    public static List<Reservation> findReservationsByDateASC(Timestamp date) throws SQLException {
         List<Reservation> list = new ArrayList<>();
 
         String sql = """
@@ -133,6 +133,7 @@ public class Reservation {
             FROM reservation r
             JOIN hotel h ON r.id_hotel = h.id_hotel
             WHERE DATE(r.date_heure_arrivee) = ?
+            ORDER BY r.date_heure_arrivee ASC
         """;
 
         try (Connection conn = DbConnection.getInstance().getConnection();
