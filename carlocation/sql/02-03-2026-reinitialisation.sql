@@ -76,23 +76,93 @@ COMMIT;
 --BEGIN;
 
 -- HOTELS (1 = aéroport)
+-- INSERT INTO hotel (code, libelle, aeroport) VALUES
+--   ('AIR-MAD', 'Aéroport de Madagascar', TRUE),
+--   ('IBIS-01', 'Hotel Ibis', FALSE),
+--   ('LOUVRE-01', 'Hotel du Louvre', FALSE),
+--   ('CARLTON-01', 'Hotel Carlton', FALSE),
+--   ('COLBERT-01', 'Hotel Colbert', FALSE);
+-- -- PARAMETRE
+-- INSERT INTO parametre (vitesse_moyenne_kmh, temps_attente_min) VALUES
+--   (30.00, 30);
+
+-- -- VEHICULES
+-- INSERT INTO vehicule (reference, nb_place, type_carburant) VALUES
+--   ('VH-001', 10, 'DIESEL'),
+--   ('VH-002', 10, 'ESSENCE'),
+--   ('VH-003', 5,  'HYBRIDE'),
+--   ('VH-004', 11, 'DIESEL'),
+--   ('VH-005', 4,  'ELECTRIQUE');
+
+-- -- RESERVATIONS (4 sur la même date 2026-03-15, 1 sur 2026-03-16)
+-- -- INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) VALUES
+-- --   (8,  TIMESTAMP '2026-03-15 08:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
+-- --   (10, TIMESTAMP '2026-03-15 08:15:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002'),
+-- --   (11, TIMESTAMP '2026-03-15 08:30:00', (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 'C004'),
+-- --   (4,  TIMESTAMP '2026-03-15 09:00:00', (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 'C003'),
+-- --   (3,  TIMESTAMP '2026-03-16 10:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C005');
+
+-- -- POUR TESTER LA SUPERPOSITION DES RESERVATIONS (exemple : 8 passagers à 8h puis 2 passagers à 8h15, alors que le véhicule a une capacité de 10, on doit pouvoir affecter les 2 passagers de la 2ème réservation au même véhicule que les 8 passagers de la 1ère réservation)
+-- INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) VALUES
+--  (8,  TIMESTAMP '2026-03-15 08:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
+--  (4, TIMESTAMP '2026-03-15 08:15:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002'),
+--  (11, TIMESTAMP '2026-03-15 08:30:00', (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 'C004'),
+--  (2,  TIMESTAMP '2026-03-15 09:00:00', (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 'C003'),
+--  (3,  TIMESTAMP '2026-03-16 10:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C005');
+
+-- -- DISTANCES (aller: aéroport -> hotels)
+-- -- INSERT INTO distance (from_hotel_id, to_hotel_id, kilometre) VALUES
+-- --   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 15.00),
+-- --   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 20.00),
+-- --   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 25.00),
+-- --   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 20.00),
+-- --   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), 0.00);
+
+
+
+-- -- DISTANCES (aéroport → hôtels)
+-- INSERT INTO distance (from_hotel_id, to_hotel_id, kilometre) VALUES
+--   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 15.00),
+--   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 20.00),
+--   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 25.00),
+--   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 20.00),
+
+--   ((SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 8.00),
+--   ((SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 12.00),
+--   ((SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 15.00),
+--   ((SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 7.00),
+--   ((SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 10.00),
+--   ((SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 6.00);
+-- --COMMIT;
+-- --```
+
+
+
+
 INSERT INTO hotel (code, libelle, aeroport) VALUES
-  ('AIR-MAD', 'Aéroport de Madagascar', TRUE),
+   ('COLBERT-01', 'Hotel Colbert', FALSE),
+   ('NOVOTEL', 'Hotel du Novotel', FALSE),
   ('IBIS-01', 'Hotel Ibis', FALSE),
-  ('LOUVRE-01', 'Hotel du Louvre', FALSE),
-  ('CARLTON-01', 'Hotel Carlton', FALSE),
-  ('COLBERT-01', 'Hotel Colbert', FALSE);
+  ('LOKANGA', 'Hotel Lokanga', FALSE),
+  ('AIR-MAD', 'Aéroport de Madagascar', TRUE);
+ 
 -- PARAMETRE
 INSERT INTO parametre (vitesse_moyenne_kmh, temps_attente_min) VALUES
-  (30.00, 30);
+  (60.00, 15);
 
 -- VEHICULES
+-- INSERT INTO vehicule (reference, nb_place, type_carburant) VALUES
+--   ('VH-001', 10, 'DIESEL'),
+--   ('VH-002', 10, 'ESSENCE'),
+--   ('VH-003', 5,  'HYBRIDE'),
+--   ('VH-004', 11, 'DIESEL'),
+--   ('VH-005', 4,  'ELECTRIQUE');
+
 INSERT INTO vehicule (reference, nb_place, type_carburant) VALUES
-  ('VH-001', 10, 'DIESEL'),
-  ('VH-002', 10, 'ESSENCE'),
-  ('VH-003', 5,  'HYBRIDE'),
-  ('VH-004', 11, 'DIESEL'),
-  ('VH-005', 4,  'ELECTRIQUE');
+	('FORD-TRANSIT-011', 18, 'DIESEL'),
+	('VW-TRANSPORTER-012', 10, 'DIESEL');
+	-- ('PEUGEOT-BOXER-013', 15, 'DIESEL'),
+	-- ('TOYOTA-HIACE-014', 15, 'ESSENCE');
 
 -- RESERVATIONS (4 sur la même date 2026-03-15, 1 sur 2026-03-16)
 -- INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) VALUES
@@ -104,11 +174,13 @@ INSERT INTO vehicule (reference, nb_place, type_carburant) VALUES
 
 -- POUR TESTER LA SUPERPOSITION DES RESERVATIONS (exemple : 8 passagers à 8h puis 2 passagers à 8h15, alors que le véhicule a une capacité de 10, on doit pouvoir affecter les 2 passagers de la 2ème réservation au même véhicule que les 8 passagers de la 1ère réservation)
 INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) VALUES
- (8,  TIMESTAMP '2026-03-15 08:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
- (4, TIMESTAMP '2026-03-15 08:15:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002'),
- (11, TIMESTAMP '2026-03-15 08:30:00', (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 'C004'),
- (2,  TIMESTAMP '2026-03-15 09:00:00', (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 'C003'),
- (3,  TIMESTAMP '2026-03-16 10:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C005');
+ (13,  TIMESTAMP '2026-03-12 08:00:00', (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 'C001'),
+ (6, TIMESTAMP '2026-03-12 08:00:00', (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 'C002'),
+ (3, TIMESTAMP '2026-03-12 08:00:00', (SELECT id_hotel FROM hotel WHERE code='NOVOTEL' LIMIT 1), 'C004'),
+ (1,  TIMESTAMP '2026-03-12 08:00:00', (SELECT id_hotel FROM hotel WHERE code='NOVOTEL' LIMIT 1), 'C003');
+--  (4,  TIMESTAMP '2026-03-16 08:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C005');
+--  (6,  TIMESTAMP '2026-03-16 08:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C005'),
+--  (12,  TIMESTAMP '2026-03-16 08:00:00', (SELECT id_hotel FROM hotel WHERE code='LOKANGA' LIMIT 1), 'C005');
 
 -- DISTANCES (aller: aéroport -> hotels)
 -- INSERT INTO distance (from_hotel_id, to_hotel_id, kilometre) VALUES
@@ -122,16 +194,16 @@ INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) V
 
 -- DISTANCES (aéroport → hôtels)
 INSERT INTO distance (from_hotel_id, to_hotel_id, kilometre) VALUES
-  ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 15.00),
-  ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 20.00),
-  ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 25.00),
-  ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 20.00),
+  ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 18.00),
+  ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='NOVOTEL' LIMIT 1), 22.50),
+  ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 12.00),
+  ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='LOKANGA' LIMIT 1), 25.00),
 
-  ((SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 8.00),
-  ((SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 12.00),
-  ((SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 15.00),
-  ((SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 7.00),
-  ((SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 10.00),
-  ((SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 6.00);
+  ((SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='NOVOTEL' LIMIT 1), 6.50),
+  ((SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 8.00),
+  ((SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='LOKANGA' LIMIT 1), 15.5),
+  ((SELECT id_hotel FROM hotel WHERE code='NOVOTEL' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 12.00),
+  ((SELECT id_hotel FROM hotel WHERE code='NOVOTEL' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='LOKANGA' LIMIT 1), 10.00),
+  ((SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='LOKANGA' LIMIT 1), 9.50);
 --COMMIT;
 --```
