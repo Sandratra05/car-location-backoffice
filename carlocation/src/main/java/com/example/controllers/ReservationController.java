@@ -53,7 +53,7 @@ public class ReservationController {
             }
 
             Map<Vehicule, List<Reservation>> assignments = vs.assignVehiculeToReservation(reservations);
-            List<Reservation> unassigned = vs.findUnassignedReservations(reservations, assignments);
+            List<Reservation> unassigned = vs.findUnassignedReservations(allReservations, assignments);
 
             Timestamp heureDepart = Reservation.getHeureDepartAvecTA(ts);
 
