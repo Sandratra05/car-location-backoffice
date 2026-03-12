@@ -42,7 +42,7 @@ public class ReservationController {
             Timestamp ts = Timestamp.valueOf(date.replace("T", " ") + ":00");
             VehiculeService vs = new VehiculeService();
 
-            List<Reservation> allReservations = Reservation.findReservationsByDate(ts);
+            List<Reservation> allReservations = Reservation.findReservationsByDateASC(ts);
 
             List<Reservation> reservations = Reservation.getReservationsDansTA(allReservations.get(0).getDateHeureArrivee());
             
