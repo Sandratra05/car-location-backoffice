@@ -1,0 +1,43 @@
+TL : Finoana ETU003203
+Dev Framework : Sariaka ETU003378,Sandratra ETU003126
+ 
+
+Todo sprint 6 :
+
+Objectif : Optimiser l'algorithme d'assignation des véhicules en tenant compte du nombre de trajets effectués et améliorer la gestion des réservations non-assignées.
+
+Concepts clés :
+- Trajet : Départ aéroport -> Retour aéroport (A/R complet)
+- Véhicule disponible : Pas en déplacement
+- Retour du véhicule : Si TA se termine à 8:30 et que le véhicule arrive (retour aéroport) à 8:30 -> véhicule pris en compte et dateDepart = 8:30 (heure d'arrivée du véhicule)
+- Réservations non-assignées : Même priorité que les réservations de l'intervalle courant -> Si toujours non-assignées, reconsidérées au prochain intervalle (cycle continu)
+
+Tâches principales :
+
+- Sandratra : Assignation + Dispo + DateDepart
+    * Créer une table `assignation` / `trajet` pour l'historique : 
+        # id (SERIAL PRIMARY KEY)
+        # id_vehicule (INTEGER REFERENCES vehicule)
+        # id_reservation (INTEGER REFERENCES reservation)
+        # date_depart (TIMESTAMP)
+        # date_retour (TIMESTAMP) 
+    * Créer méthode `getLastReturnDate(Integer idVehicule)`
+        # SELECT MAX(date_retour) FROM assignation WHERE id_vehicule = ?
+    * Créer méthode `countTrajets(Integer idVehicule)`
+        # SELECT COUNT(DISTINCT DATE(date_depart)) FROM assignation WHERE id_vehicule = ?
+    * Modifier dans `VehiculeService` -> `assignVehiculeToReservation()` :
+        # Vérifier disponibilité du véhicule en fin d'intervalle. (S'il revient à la fin du TA, il est dispo)
+        # Critères de sélection (dans l'ordre) : 1/ Capacité ≥ besoin -> 2/ Capacité plus proche -> 3/ MOINS de trajets effectués (countTrajets) -> 4/ Priorité Carburant (DIESEL, etc.)
+    * Modifier DateDepart :
+        # Si le véhicule choisi revient pendant le TA (ex: 8:30 pour intervalle finissant à 8:30), son heureDepart pour les nouvelles réservations devient 8:30
+
+
+
+- Sariaka : DateDepart réel + Non-assignés
+    * Modifier la fonction DateDepart (pour la grappe de réservations) `getHeureDepartAvecTA` :
+        # Exclure les réservations non-assignées du l'intervalle précédent pour le calcul de l'heure du "dernier vol" (dateDepart de la grappe)
+    * Gérer réservations non-assignées :
+        # Renvoyer au prochain intervalle (TA suivant) les réservations sans véhicule. Reconsidérées à chaque intervalle (cycle continu).
+        # Mettre à jour logique de regroupement intervalle. (ex: la réservation de 8:00 non assignée rejoint le pool de 8:30)
+
+    # Mettre à jour `planning-result.jsp` pour afficher la colonne "Nb trajets" et indiquer visuellement les réservations "reportées".
