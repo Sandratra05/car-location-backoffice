@@ -545,4 +545,11 @@ public class VehiculeService {
         }
     }
 
+    public Timestamp getHeureRetour(Long vehiculeId) throws SQLException {
+        return vehiculeRepository.getLastReturnDate(vehiculeId);
+    }
+
+    public Integer countTrajets(Long vehiculeId) throws SQLException {
+        return vehiculeRepository.countTrajets(vehiculeId);
+    }
 }
