@@ -15,15 +15,15 @@ Concepts clés :
 Tâches principales :
 
 - Sandratra : Assignation + Dispo + DateDepart
-    * Créer une table `assignation` / `trajet` pour l'historique : 
+    * (DONE) Créer une table `assignation` / `trajet` pour l'historique : 
         # id (SERIAL PRIMARY KEY)
         # id_vehicule (INTEGER REFERENCES vehicule)
         # id_reservation (INTEGER REFERENCES reservation)
         # date_depart (TIMESTAMP)
         # date_retour (TIMESTAMP) 
-    * Créer méthode `getLastReturnDate(Integer idVehicule)`
+    * (DONE) Créer méthode `getLastReturnDate(Integer idVehicule)`
         # SELECT MAX(date_retour) FROM assignation WHERE id_vehicule = ?
-    * Créer méthode `countTrajets(Integer idVehicule)`
+    * (DONE) Créer méthode `countTrajets(Integer idVehicule)`
         # SELECT COUNT(DISTINCT DATE(date_depart)) FROM assignation WHERE id_vehicule = ?
     * Modifier dans `VehiculeService` -> `assignVehiculeToReservation()` :
         # Vérifier disponibilité du véhicule en fin d'intervalle. (S'il revient à la fin du TA, il est dispo)
