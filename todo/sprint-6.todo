@@ -30,6 +30,9 @@ Tâches principales :
         # Critères de sélection (dans l'ordre) : 1/ Capacité ≥ besoin -> 2/ Capacité plus proche -> 3/ MOINS de trajets effectués (countTrajets) -> 4/ Priorité Carburant (DIESEL, etc.)
     * Modifier DateDepart :
         # Si le véhicule choisi revient pendant le TA (ex: 8:30 pour intervalle finissant à 8:30), son heureDepart pour les nouvelles réservations devient 8:30
+    * Sauvegarder l'assignation :
+        # Créer méthode `saveAssignation(idVehicule, idReservation, dateDepart, dateRetour)`
+        # Appeler `saveAssignation` après la validation d'un trajet (dans ReservationController ou VehiculeService) pour persister l'historique et permettre au `countTrajets` de fonctionner au prochain check.
 
 
 
