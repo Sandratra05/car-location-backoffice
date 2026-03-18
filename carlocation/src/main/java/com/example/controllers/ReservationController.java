@@ -60,6 +60,7 @@ public class ReservationController {
             Map<Vehicule, Timestamp> returnTimes = new HashMap<>();
             Map<Vehicule, java.math.BigDecimal> kmMap = new HashMap<>();
             Map<Vehicule, Integer> trajetsMap = new HashMap<>();
+            Map<String, Integer> trajetsSummary = new HashMap<>();
             Map<Vehicule, String> placesMap = new HashMap<>();
             Map<Vehicule, Integer> occupiedMap = new HashMap<>();
 
@@ -87,8 +88,10 @@ public class ReservationController {
                 try {
                     int nbTrajets = vs.countTrajets(v.getId());
                     trajetsMap.put(v, nbTrajets);
+                    trajetsSummary.put(v.getReference(), nbTrajets);
                 } catch (Exception e) {
                     trajetsMap.put(v, 0);
+                    trajetsSummary.put(v.getReference(), 0);
                 }
 
                 // Places occupées / total
@@ -125,6 +128,7 @@ public class ReservationController {
             mv.addAttribute("returnTimes", returnTimes);
             mv.addAttribute("kmMap", kmMap);
             mv.addAttribute("trajetsMap", trajetsMap);
+            mv.addAttribute("trajetsSummary", trajetsSummary);
             mv.addAttribute("placesMap", placesMap);
             mv.addAttribute("occupiedMap", occupiedMap);
             mv.addAttribute("tempsAttenteMin", tempsAttenteMin);

@@ -41,7 +41,7 @@
                             <th style="padding:8px; border:1px solid #ddd;">Réservations</th>
                             <th style="padding:8px; border:1px solid #ddd;">Trajet</th>
                             <th style="padding:8px; border:1px solid #ddd;">Km parcouru</th>
-                            <th style="padding:8px; border:1px solid #ddd;">Nb trajets</th>
+                            
                             <th style="padding:8px; border:1px solid #ddd;">Places</th>
                             <th style="padding:8px; border:1px solid #ddd;">Départ véhicule</th>
                             <th style="padding:8px; border:1px solid #ddd;">Retour aéroport</th>
@@ -83,11 +83,7 @@
                                 <%= km != null ? km.setScale(2, java.math.RoundingMode.HALF_UP) + " km" : "-" %>
                             </td>
                             <td style="padding:8px; border:1px solid #ddd; vertical-align:top; text-align:center;">
-                                <% String nbTrajetsStr = "0"; if (nbTrajets != null) { if (nbTrajets == 1) nbTrajetsStr = "1er"; else nbTrajetsStr = nbTrajets + "e"; } %>
-                                <%= nbTrajetsStr %>
-                            </td>
-                            <td style="padding:8px; border:1px solid #ddd; vertical-align:top; text-align:center;">
-                                <% int tot = v.getNbPlace(); int occ = occupied != null ? occupied : 0; int free = tot - occ; %>
+                                <% int tot = v.getNbPlace(); int occ = 0; for (Reservation rr : resList) { if (rr.getNbPassager() != null) occ += rr.getNbPassager(); } int free = tot - occ; %>
                                 <%= occ %>/<%= tot %> places<%= free > 0 ? " (" + free + " libres)" : " (complet)" %>
                             </td>
                             <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
@@ -122,7 +118,7 @@
                             <tbody>
                             <% for (Reservation r : unassigned) { %>
                                 <tr>
-                                    <td style="padding:8px; border:1px solid #ddd;">#<%= r.getIdReservation() %></td>
+                                    <td style="padding:8px; border:1px solid #ddd;">#<%= r.getIdReservation() %> (reportée)</td>
                                     <td style="padding:8px; border:1px solid #ddd; text-align:right;"><%= r.getNbPassager() %></td>
                                     <td style="padding:8px; border:1px solid #ddd;"><%= r.getHotel() != null ? r.getHotel().getLibelle() : "-" %></td>
                                     <td style="padding:8px; border:1px solid #ddd; color:orange; font-weight:bold;">Reportée</td>
@@ -132,6 +128,34 @@
                         </table>
                 </div>
         <%  } %>
+
+        <%
+            Map trajetsSummary = (Map) request.getAttribute("trajetsSummary");
+            if (trajetsSummary != null && !trajetsSummary.isEmpty()) {
+        %>
+            <hr/>
+            <div class="card">
+                <h3>Nombre de trajets par véhicule (aujourd'hui)</h3>
+                <table style="width:100%; border-collapse:collapse; margin-top:8px;">
+                    <thead style="background:#f4f4f4; text-align:left;">
+                        <tr>
+                            <th style="padding:6px; border:1px solid #ddd;">Véhicule</th>
+                            <th style="padding:6px; border:1px solid #ddd;">Trajets</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <% for (Object k : trajetsSummary.keySet()) {
+                           Object val = trajetsSummary.get(k);
+                    %>
+                        <tr>
+                            <td style="padding:6px; border:1px solid #ddd;"><strong><%= k %></strong></td>
+                            <td style="padding:6px; border:1px solid #ddd;"><%= val != null ? val : 0 %></td>
+                        </tr>
+                    <% } %>
+                    </tbody>
+                </table>
+            </div>
+        <% } %>
     </div>
 </div>
 </body>

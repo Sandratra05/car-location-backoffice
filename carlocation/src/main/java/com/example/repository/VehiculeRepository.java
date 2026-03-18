@@ -118,7 +118,7 @@ public class VehiculeRepository {
     }
 
     public Integer countTrajets(Long vehiculeId) throws SQLException {
-        String sql = "SELECT COUNT(DISTINCT DATE(date_depart)) as trajets_count FROM assignation WHERE id_vehicule = ?";
+        String sql = "SELECT COUNT(DISTINCT date_depart) as trajets_count FROM assignation WHERE id_vehicule = ?";
         
         try (Connection conn = DbConnection.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {

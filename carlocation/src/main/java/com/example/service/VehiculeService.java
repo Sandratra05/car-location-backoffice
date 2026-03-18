@@ -19,7 +19,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
-import java.util.Comparator;
 import java.util.Random;
 
 import com.example.entity.Distance;
@@ -352,12 +351,16 @@ public class VehiculeService {
             List<AssignPair> assignedPairs = new ArrayList<>();
 
             for (Reservation r : batch) {
-
                 int need = r.getNbPassager() != null ? r.getNbPassager() : 0;
                 if (need <= 0) continue;
 
                 Vehicule chosen = chooseVehicleForReservation(vehicles, remaining, need);
-                if (chosen == null) continue;
+                if (chosen == null) {
+                    System.out.println("No vehicle found for reservation " + r.getIdReservation() + " needing " + need + " places");
+                    continue;
+                }
+
+                System.out.println("Assigning reservation " + r.getIdReservation() + " (" + need + " places) to vehicle " + chosen.getReference() + " (remaining capacity: " + remaining.get(chosen) + ")");
 
                 result.computeIfAbsent(chosen, k -> new ArrayList<>()).add(r);
                 remaining.put(chosen, remaining.getOrDefault(chosen, 0) - need);
@@ -372,6 +375,9 @@ public class VehiculeService {
                 List<Reservation> assignedRes = new ArrayList<>();
                 for (AssignPair p : assignedPairs) assignedRes.add(p.reservation);
                 intervalDepart = getDepartTimeFromAssignedReservations(assignedRes);
+                System.out.println("Interval [" + start + " to " + end + "] - Assigned " + assignedPairs.size() + " reservations, depart time: " + intervalDepart);
+            } else {
+                System.out.println("Interval [" + start + " to " + end + "] - No reservations assigned");
             }
 
             // appliquer la même heure de départ à tous les véhicules affectés dans l'intervalle
@@ -409,7 +415,10 @@ public class VehiculeService {
                     // réservation non assignée: la déplacer à la fin pour la reconsidérer
                     // au prochain intervalle
                     boolean removed = unassigned.remove(r);
-                    if (removed) unassigned.add(r);
+                    if (removed) {
+                        unassigned.add(r);
+                        System.out.println("Reservation " + r.getIdReservation() + " (" + r.getNbPassager() + " places) not assigned in this interval, reporting to next interval");
+                    }
                 }
             }
         }
