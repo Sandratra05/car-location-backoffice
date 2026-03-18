@@ -41,31 +41,19 @@ public class ReservationController {
         try {
             Timestamp ts = Timestamp.valueOf(date.replace("T", " ") + ":00");
             VehiculeService vs = new VehiculeService();
-
-            List<Reservation> allReservations = Reservation.findReservationsByDateASC(ts);
-
-            List<Reservation> reservations = Reservation.getReservationsDansTA(allReservations.get(0).getDateHeureArrivee());
-            
-            if (reservations.isEmpty()) {
-                mv.setView("planning-form.jsp");
-                mv.addAttribute("error", "Aucune réservation trouvée pour la date sélectionnée.");
-                return mv;
-            }
-
-            Map<Vehicule, List<Reservation>> assignments = vs.assignVehiculeToReservation(reservations);
-            List<Reservation> unassigned = vs.findUnassignedReservations(allReservations, assignments);
-
+            // planifyByDate gère : récup des réservations + découpage en intervalles + assignations
+            Map<Vehicule, List<Reservation>> assignments = vs.planifyByDate(ts);
+            // Heure de départ affichée (fallback simple)
             Timestamp heureDepart = Reservation.getHeureDepartAvecTA(ts);
-
-            if (heureDepart == null) {
-                heureDepart = reservations.get(0).getDateHeureArrivee();
-            }
+            if (heureDepart == null) heureDepart = ts;
 
             // Préparer les données supplémentaires pour l'affichage
             Map<Vehicule, String> routes = new HashMap<>();
             Map<Vehicule, Timestamp> departTimes = new HashMap<>();
             Map<Vehicule, Timestamp> returnTimes = new HashMap<>();
             Map<Vehicule, java.math.BigDecimal> kmMap = new HashMap<>();
+
+            Map<Vehicule, Timestamp> intervalDepartTimes = vs.getLastDepartTimes();
 
             for (Map.Entry<Vehicule, List<Reservation>> entry : assignments.entrySet()) {
                 Vehicule v = entry.getKey();
@@ -81,12 +69,13 @@ public class ReservationController {
                 try {
                     java.math.BigDecimal km = vs.calculTotalDistance(resas);
                     kmMap.put(v, km);
-                } catch (Exception e) {
+                } catch (Exception e) { 
                     kmMap.put(v, java.math.BigDecimal.ZERO);
                 }
 
-                // Même heure de départ pour tous les véhicules (sprint 5 : TA)
-                departTimes.put(v, heureDepart);
+                // Heure de départ = heure de départ de l'intervalle (commune à tous les véhicules de l'intervalle)
+                Timestamp departInterval = intervalDepartTimes.get(v);
+                departTimes.put(v, departInterval != null ? departInterval : heureDepart);
 
                 Timestamp ret = null;
                 try {
@@ -99,7 +88,6 @@ public class ReservationController {
 
             mv.setView("planning-result.jsp");
             mv.addAttribute("assignments", assignments);
-            mv.addAttribute("unassigned", unassigned);
             mv.addAttribute("routes", routes);
             mv.addAttribute("departTimes", departTimes);
             mv.addAttribute("returnTimes", returnTimes);

@@ -15,7 +15,7 @@ Concepts clés :
 Tâches principales :
 
 - Sandratra : Assignation + Dispo + DateDepart
-    * modifier dans config/DbConnection : 
+    * (DONE) modifier dans config/DbConnection : 
         this.jdbcUrl = getEnvOrDefault("DATABASE_URL", "jdbc:postgresql://localhost:5432/carlocation");
     * (DONE) Créer une table `assignation` / `trajet` pour l'historique : 
         # id (SERIAL PRIMARY KEY)
