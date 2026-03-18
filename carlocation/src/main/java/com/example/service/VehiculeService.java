@@ -390,7 +390,28 @@ public class VehiculeService {
                 }
             }
 
-            for (Reservation r : batch) unassigned.remove(r);
+            // Retirer uniquement les réservations qui ont été assignées.
+            // Les réservations non-assignées sont renvoyées en fin de liste
+            // pour être reconsidérées au prochain intervalle (cycle continu).
+            Set<Integer> assignedIds = new HashSet<>();
+            for (AssignPair p : assignedPairs) {
+                if (p.reservation != null && p.reservation.getIdReservation() != null) {
+                    assignedIds.add(p.reservation.getIdReservation());
+                }
+            }
+
+            for (Reservation r : batch) {
+                if (r == null) continue;
+                Integer id = r.getIdReservation();
+                if (id != null && assignedIds.contains(id)) {
+                    unassigned.remove(r);
+                } else {
+                    // réservation non assignée: la déplacer à la fin pour la reconsidérer
+                    // au prochain intervalle
+                    boolean removed = unassigned.remove(r);
+                    if (removed) unassigned.add(r);
+                }
+            }
         }
 
         return result;

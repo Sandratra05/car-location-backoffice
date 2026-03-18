@@ -41,6 +41,8 @@
                             <th style="padding:8px; border:1px solid #ddd;">Réservations</th>
                             <th style="padding:8px; border:1px solid #ddd;">Trajet</th>
                             <th style="padding:8px; border:1px solid #ddd;">Km parcouru</th>
+                            <th style="padding:8px; border:1px solid #ddd;">Nb trajets</th>
+                            <th style="padding:8px; border:1px solid #ddd;">Places</th>
                             <th style="padding:8px; border:1px solid #ddd;">Départ véhicule</th>
                             <th style="padding:8px; border:1px solid #ddd;">Retour aéroport</th>
                         </tr>
@@ -57,6 +59,11 @@
                             Timestamp vehicleDepart = (Timestamp) ((Map) request.getAttribute("departTimes")).get(v);
                             Timestamp vehicleReturn = (Timestamp) ((Map) request.getAttribute("returnTimes")).get(v);
                             BigDecimal km = (BigDecimal) ((Map) request.getAttribute("kmMap")).get(v);
+                            Integer nbTrajets = (Integer) ((Map) request.getAttribute("trajetsMap")).get(v);
+                            String places = (String) ((Map) request.getAttribute("placesMap")).get(v);
+                            Integer occupied = (Integer) ((Map) request.getAttribute("occupiedMap")).get(v);
+                            Integer tempsAttenteMin = (Integer) request.getAttribute("tempsAttenteMin");
+
 
                             // Construire détails réservations
                             String details = "";
@@ -74,6 +81,14 @@
                             <td style="padding:8px; border:1px solid #ddd; vertical-align:top;"><%= trajet %></td>
                             <td style="padding:8px; border:1px solid #ddd; vertical-align:top; text-align:right;">
                                 <%= km != null ? km.setScale(2, java.math.RoundingMode.HALF_UP) + " km" : "-" %>
+                            </td>
+                            <td style="padding:8px; border:1px solid #ddd; vertical-align:top; text-align:center;">
+                                <% String nbTrajetsStr = "0"; if (nbTrajets != null) { if (nbTrajets == 1) nbTrajetsStr = "1er"; else nbTrajetsStr = nbTrajets + "e"; } %>
+                                <%= nbTrajetsStr %>
+                            </td>
+                            <td style="padding:8px; border:1px solid #ddd; vertical-align:top; text-align:center;">
+                                <% int tot = v.getNbPlace(); int occ = occupied != null ? occupied : 0; int free = tot - occ; %>
+                                <%= occ %>/<%= tot %> places<%= free > 0 ? " (" + free + " libres)" : " (complet)" %>
                             </td>
                             <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
                                 <%= vehicleDepart != null ? timeFmt.format(vehicleDepart) : "-" %>
@@ -101,6 +116,7 @@
                                     <th style="padding:8px; border:1px solid #ddd;">Num Réservation</th>
                                     <th style="padding:8px; border:1px solid #ddd;">Nb Passagers</th>
                                     <th style="padding:8px; border:1px solid #ddd;">Hôtel</th>
+                                    <th style="padding:8px; border:1px solid #ddd;">Statut</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -109,6 +125,7 @@
                                     <td style="padding:8px; border:1px solid #ddd;">#<%= r.getIdReservation() %></td>
                                     <td style="padding:8px; border:1px solid #ddd; text-align:right;"><%= r.getNbPassager() %></td>
                                     <td style="padding:8px; border:1px solid #ddd;"><%= r.getHotel() != null ? r.getHotel().getLibelle() : "-" %></td>
+                                    <td style="padding:8px; border:1px solid #ddd; color:orange; font-weight:bold;">Reportée</td>
                                 </tr>
                             <% } %>
                             </tbody>
