@@ -347,8 +347,8 @@ public class VehiculeService {
             Map<Vehicule, Integer> remaining = initRemaining(vehicles);
 
             // Pour appliquer une heure de départ commune à tout l'intervalle
+            // ON NE PREND EN COMPTE QUE LES RÉSERVATIONS EFFECTIVEMENT ASSIGNÉES
             Set<Vehicule> vehiclesUsedInInterval = new HashSet<>();
-            Timestamp intervalDepart = null; // max des arrivals des resas effectivement assignées dans cet intervalle
             List<AssignPair> assignedPairs = new ArrayList<>();
 
             for (Reservation r : batch) {
@@ -364,10 +364,14 @@ public class VehiculeService {
 
                 vehiclesUsedInInterval.add(chosen);
                 assignedPairs.add(new AssignPair(chosen, r));
-                Timestamp arrival = r.getDateHeureArrivee();
-                if (arrival != null && (intervalDepart == null || arrival.after(intervalDepart))) {
-                    intervalDepart = arrival;
-                }
+            }
+
+            // Calculer l'heure de départ de l'intervalle uniquement à partir des réservations assignées
+            Timestamp intervalDepart = null;
+            if (!assignedPairs.isEmpty()) {
+                List<Reservation> assignedRes = new ArrayList<>();
+                for (AssignPair p : assignedPairs) assignedRes.add(p.reservation);
+                intervalDepart = getDepartTimeFromAssignedReservations(assignedRes);
             }
 
             // appliquer la même heure de départ à tous les véhicules affectés dans l'intervalle
