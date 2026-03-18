@@ -125,6 +125,8 @@ INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) V
 (15,  TIMESTAMP '2026-03-15 12:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
 (5,  TIMESTAMP '2026-03-15 12:10:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
  (8, TIMESTAMP '2026-03-15 12:20:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002');
+--  (4, TIMESTAMP '2026-03-15 15:20:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002');
+
 --  (3,  TIMESTAMP '2026-03-16 10:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C005');
 
 -- DISTANCES (aller: aéroport -> hotels)  

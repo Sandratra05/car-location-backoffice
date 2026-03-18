@@ -316,6 +316,8 @@ public class VehiculeService {
         // reset du dernier calcul
         lastDepartTimes.clear();
 
+        if (taMinutes <= 0) taMinutes = 30;
+
         // garantir l'ordre asc par date d'arrivée (utile pour découper correctement les intervalles)
         allReservations.sort((a, b) -> {
             Timestamp ta = a != null ? a.getDateHeureArrivee() : null;
@@ -328,18 +330,34 @@ public class VehiculeService {
 
         // s'appuyer sur la liste fournie (supposée triée asc par date d'arrivée)
         List<Reservation> unassigned = new ArrayList<>(allReservations);
+        // Une réservation non assignée dans un intervalle ne redevient éligible
+        // qu'à partir de la fin de cet intervalle.
+        Map<Integer, Timestamp> nextEligibleByReservation = new HashMap<>();
+
+        int maxVehicleCapacity = 0;
+        for (Vehicule v : getAllVehicules()) {
+            if (v != null && v.getNbPlace() > maxVehicleCapacity) {
+                maxVehicleCapacity = v.getNbPlace();
+            }
+        }
 
         while (!unassigned.isEmpty()) {
-            Reservation first = unassigned.get(0);
-            Timestamp start = first.getDateHeureArrivee();
-            if (start == null) { unassigned.remove(0); continue; }
+            Timestamp start = findNextIntervalStart(unassigned, nextEligibleByReservation);
+            if (start == null) break;
             Timestamp end = new Timestamp(start.getTime() + taMinutes * 60L * 1000L);
 
-            List<Reservation> batch = collectBatch(unassigned, end);
-            if (batch.isEmpty()) { unassigned.remove(0); System.out.println("No reservations in batch"); continue; }
+            List<Reservation> batch = collectBatch(unassigned, end, nextEligibleByReservation);
+            if (batch.isEmpty()) continue;
 
             List<Vehicule> vehicles = findAvailableVehiculesBetween(start, end);
-            if (vehicles.isEmpty()) { for (Reservation r : batch) unassigned.remove(r); System.out.println("No available vehicles"); continue; }
+            if (vehicles.isEmpty()) {
+                // Aucun véhicule disponible: on reporte tout le batch au prochain intervalle.
+                for (Reservation r : batch) {
+                    if (r == null || r.getIdReservation() == null) continue;
+                    nextEligibleByReservation.put(r.getIdReservation(), end);
+                }
+                continue;
+            }
 
             batch = sortReservationsByPassengersDesc(batch);
             vehicles = sortVehiclesByCapacityDesc(vehicles);
@@ -354,13 +372,15 @@ public class VehiculeService {
                 int need = r.getNbPassager() != null ? r.getNbPassager() : 0;
                 if (need <= 0) continue;
 
-                Vehicule chosen = chooseVehicleForReservation(vehicles, remaining, need);
-                if (chosen == null) {
-                    System.out.println("No vehicle found for reservation " + r.getIdReservation() + " needing " + need + " places");
+                if (maxVehicleCapacity > 0 && need > maxVehicleCapacity) {
+                    // Réservation impossible (aucun véhicule n'a assez de places):
+                    // on la retire du cycle d'assignation, elle restera "non assignée" côté affichage.
+                    unassigned.remove(r);
                     continue;
                 }
 
-                System.out.println("Assigning reservation " + r.getIdReservation() + " (" + need + " places) to vehicle " + chosen.getReference() + " (remaining capacity: " + remaining.get(chosen) + ")");
+                Vehicule chosen = chooseVehicleForReservation(vehicles, remaining, need);
+                if (chosen == null) continue;
 
                 result.computeIfAbsent(chosen, k -> new ArrayList<>()).add(r);
                 remaining.put(chosen, remaining.getOrDefault(chosen, 0) - need);
@@ -375,9 +395,6 @@ public class VehiculeService {
                 List<Reservation> assignedRes = new ArrayList<>();
                 for (AssignPair p : assignedPairs) assignedRes.add(p.reservation);
                 intervalDepart = getDepartTimeFromAssignedReservations(assignedRes);
-                System.out.println("Interval [" + start + " to " + end + "] - Assigned " + assignedPairs.size() + " reservations, depart time: " + intervalDepart);
-            } else {
-                System.out.println("Interval [" + start + " to " + end + "] - No reservations assigned");
             }
 
             // appliquer la même heure de départ à tous les véhicules affectés dans l'intervalle
@@ -412,14 +429,44 @@ public class VehiculeService {
                 if (id != null && assignedIds.contains(id)) {
                     unassigned.remove(r);
                 } else {
-                    // réservation non assignée: la déplacer à la fin pour la reconsidérer
-                    // au prochain intervalle
-                    boolean removed = unassigned.remove(r);
-                    if (removed) {
-                        unassigned.add(r);
-                        System.out.println("Reservation " + r.getIdReservation() + " (" + r.getNbPassager() + " places) not assigned in this interval, reporting to next interval");
+                    // Réservation non assignée : reporter au prochain intervalle
+                    // Elle sera reconsidérée avec les nouvelles réservations de cet intervalle
+                    if (id != null) {
+                        nextEligibleByReservation.put(id, end);
                     }
                 }
+            }
+
+            // Vérifier s'il reste des intervalles avec des réservations "naturelles"
+            // Une réservation "naturelle" est une réservation dont l'heure d'arrivée réelle
+            // est après l'intervalle courant (donc pas encore traitée)
+            boolean hasNaturalReservationsLeft = false;
+            for (Reservation r : unassigned) {
+                if (r == null) continue;
+                Integer id = r.getIdReservation();
+                Timestamp arrival = r.getDateHeureArrivee();
+                if (arrival != null && arrival.getTime() >= end.getTime()) {
+                    // Cette réservation n'a pas encore été traitée naturellement
+                    Timestamp eligible = nextEligibleByReservation.get(id);
+                    if (eligible == null) {
+                        // C'est une réservation naturelle (pas reportée)
+                        hasNaturalReservationsLeft = true;
+                        break;
+                    }
+                }
+            }
+
+            // Si plus aucune réservation naturelle, retirer les reportées définitivement
+            if (!hasNaturalReservationsLeft) {
+                List<Reservation> toRemove = new ArrayList<>();
+                for (Reservation r : unassigned) {
+                    if (r == null) continue;
+                    Integer id = r.getIdReservation();
+                    if (id != null && nextEligibleByReservation.containsKey(id)) {
+                        toRemove.add(r);
+                    }
+                }
+                unassigned.removeAll(toRemove);
             }
         }
 
@@ -436,14 +483,57 @@ public class VehiculeService {
         }
     }
 
-    // Helper: collecte les réservations dont la date_heure_arrivee <= end (unassigned doit être triée asc)
-    private List<Reservation> collectBatch(List<Reservation> unassigned, Timestamp end) {
+    private Timestamp getEffectiveArrival(Reservation r, Map<Integer, Timestamp> nextEligibleByReservation) {
+        if (r == null) return null;
+        Timestamp arrival = r.getDateHeureArrivee();
+        Integer id = r.getIdReservation();
+        if (arrival == null || id == null) return arrival;
+
+        Timestamp eligible = nextEligibleByReservation.get(id);
+        if (eligible != null && eligible.after(arrival)) {
+            return eligible;
+        }
+        return arrival;
+    }
+
+    private Timestamp findNextIntervalStart(List<Reservation> unassigned, Map<Integer, Timestamp> nextEligibleByReservation) {
+        Timestamp min = null;
+        List<Reservation> invalid = new ArrayList<>();
+
+        // Ne prendre que les réservations NATURELLES (non reportées) pour déterminer le début de l'intervalle
+        for (Reservation r : unassigned) {
+            if (r == null) {
+                invalid.add(r);
+                continue;
+            }
+            Integer id = r.getIdReservation();
+            // Ignorer les réservations reportées pour le calcul du start
+            if (id != null && nextEligibleByReservation.containsKey(id)) {
+                continue;
+            }
+            Timestamp arrival = r.getDateHeureArrivee();
+            if (arrival == null) {
+                invalid.add(r);
+                continue;
+            }
+            if (min == null || arrival.before(min)) {
+                min = arrival;
+            }
+        }
+
+        if (!invalid.isEmpty()) {
+            unassigned.removeAll(invalid);
+        }
+
+        return min;
+    }
+
+    // Helper: collecte les réservations éligibles dont la date d'arrivée effective <= end
+    private List<Reservation> collectBatch(List<Reservation> unassigned, Timestamp end, Map<Integer, Timestamp> nextEligibleByReservation) {
         List<Reservation> batch = new ArrayList<>();
         for (Reservation r : unassigned) {
-            Timestamp t = r.getDateHeureArrivee();
-            System.out.println(r.getIdReservation() + " arrival: " + t + " <= batch end: " + end + " ? " + (t != null && t.getTime() <= end.getTime()));
+            Timestamp t = getEffectiveArrival(r, nextEligibleByReservation);
             if (t != null && t.getTime() <= end.getTime()) batch.add(r);
-            else break;
         }
         return batch;
     }
