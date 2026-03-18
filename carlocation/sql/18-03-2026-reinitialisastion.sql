@@ -5,6 +5,7 @@
 BEGIN;
 
 -- Supprimer les tables (ordre adapté aux contraintes FK)
+DROP TABLE IF EXISTS assignation CASCADE;
 DROP TABLE IF EXISTS distance CASCADE;
 DROP TABLE IF EXISTS assignation CASCADE;
 DROP TABLE IF EXISTS reservation CASCADE;
@@ -122,7 +123,7 @@ INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) V
  (1,  TIMESTAMP '2026-03-15 09:00:00', (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 'C003');
 --  (3,  TIMESTAMP '2026-03-16 10:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C005');
 
--- DISTANCES (aller: aéroport -> hotels)
+-- DISTANCES (aller: aéroport -> hotels)  
 -- INSERT INTO distance (from_hotel_id, to_hotel_id, kilometre) VALUES
 --   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 15.00),
 --   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 20.00),
