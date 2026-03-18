@@ -100,4 +100,36 @@ public class VehiculeRepository {
             TypeCarburant.valueOf(rs.getString("type_carburant"))
         );
     }
+
+    public Timestamp getLastReturnDate(Long vehiculeId) throws SQLException {
+        String sql = "SELECT MAX(date_retour) as last_return_date FROM assignation WHERE id_vehicule = ?";
+        
+        try (Connection conn = DbConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setLong(1, vehiculeId);
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                return rs.getTimestamp("last_return_date");
+            }
+            return null;
+        }
+    }
+
+    public Integer countTrajets(Long vehiculeId) throws SQLException {
+        String sql = "SELECT COUNT(DISTINCT DATE(date_depart)) as trajets_count FROM assignation WHERE id_vehicule = ?";
+        
+        try (Connection conn = DbConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setLong(1, vehiculeId);
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                return rs.getInt("trajets_count");
+            }
+            return 0;
+        }
+    }
 }

@@ -34,9 +34,9 @@ public class DbConnection {
             }
         } else {
             // Format local ou JDBC direct
-            this.jdbcUrl = getEnvOrDefault("DATABASE_URL", "jdbc:postgresql://localhost:5432/voitures");
+            this.jdbcUrl = getEnvOrDefault("DATABASE_URL", "jdbc:postgresql://localhost:5432/carlocation");
             this.username = getEnvOrDefault("DATABASE_USERNAME", "postgres");
-            this.password = getEnvOrDefault("DATABASE_PASSWORD", "admin");
+            this.password = getEnvOrDefault("DATABASE_PASSWORD", "postgres");
         }
     }
 
