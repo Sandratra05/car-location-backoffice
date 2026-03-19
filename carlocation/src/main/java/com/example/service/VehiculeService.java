@@ -273,6 +273,42 @@ public class VehiculeService {
     }
 
     /**
+     * Retourne l'heure de disponibilité de chaque véhicule (= heure de retour du dernier trajet).
+     * Si le véhicule n'a pas de trajet avant l'intervalle, il est disponible immédiatement (null).
+     */
+    public Map<Vehicule, Timestamp> findVehicleAvailability(List<Vehicule> vehicles, Timestamp beforeTime) throws SQLException {
+        Map<Vehicule, Timestamp> availability = new HashMap<>();
+        if (vehicles == null || vehicles.isEmpty()) return availability;
+
+        String sql = """
+            SELECT id_vehicule, MAX(date_retour) as last_return
+            FROM assignation
+            WHERE date_retour <= ?
+            GROUP BY id_vehicule
+        """;
+
+        try (Connection conn = DbConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setTimestamp(1, beforeTime);
+
+            Map<Long, Timestamp> lastReturns = new HashMap<>();
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    lastReturns.put(rs.getLong("id_vehicule"), rs.getTimestamp("last_return"));
+                }
+            }
+
+            for (Vehicule v : vehicles) {
+                Timestamp lastReturn = lastReturns.get(v.getId());
+                availability.put(v, lastReturn); // null si pas de trajet précédent
+            }
+        }
+
+        return availability;
+    }
+
+    /**
      * Accès aux heures de départ calculées lors du dernier appel à `assignByIntervals`.
      * Valeur = heure de départ de l'intervalle auquel le véhicule a été affecté.
      */
@@ -424,16 +460,16 @@ public class VehiculeService {
                 intervalDepart = getDepartTimeFromAssignedReservations(assignedRes);
             }
 
-            // appliquer la même heure de départ à tous les véhicules affectés dans l'intervalle
-            if (intervalDepart != null && !vehiclesUsedInInterval.isEmpty()) {
-                for (Vehicule v : vehiclesUsedInInterval) {
-                    // si le véhicule est utilisé plusieurs fois dans la journée, on garde son 1er départ
-                    Timestamp existing = lastDepartTimes.get(v);
-                    if (existing == null || intervalDepart.before(existing)) {
-                        lastDepartTimes.put(v, intervalDepart);
-                    }
-                }
+            // Récupérer l'heure de disponibilité de chaque véhicule (retour du dernier trajet)
+            Map<Vehicule, Timestamp> vehicleAvailability = new HashMap<>();
+            try {
+                vehicleAvailability = findVehicleAvailability(new ArrayList<>(vehiclesUsedInInterval), end);
+            } catch (SQLException ignore) {
+            }
 
+            // Appliquer l'heure de départ pour chaque véhicule
+            // Heure de départ = max(intervalDepart, vehicleAvailability)
+            if (intervalDepart != null && !vehiclesUsedInInterval.isEmpty()) {
                 // Regrouper les réservations par véhicule pour calculer l'heure de retour commune
                 Map<Vehicule, List<Reservation>> vehicleReservations = new HashMap<>();
                 for (AssignPair pair : assignedPairs) {
@@ -442,21 +478,34 @@ public class VehiculeService {
                     }
                 }
 
-                // Persister les assignations avec l'heure de retour calculée à partir du départ commun
+                // Persister les assignations avec l'heure de départ et retour calculées pour chaque véhicule
                 for (Map.Entry<Vehicule, List<Reservation>> entry : vehicleReservations.entrySet()) {
                     Vehicule v = entry.getKey();
                     List<Reservation> vReservations = entry.getValue();
 
-                    // Calculer l'heure de retour commune pour ce véhicule
+                    // Heure de départ effective = max(intervalDepart, vehicleAvailability)
+                    Timestamp vehicleAvailable = vehicleAvailability.get(v);
+                    Timestamp vehicleDepart = intervalDepart;
+                    if (vehicleAvailable != null && vehicleAvailable.after(intervalDepart)) {
+                        vehicleDepart = vehicleAvailable;
+                    }
+
+                    // Stocker l'heure de départ effective pour l'affichage
+                    Timestamp existing = lastDepartTimes.get(v);
+                    if (existing == null || vehicleDepart.before(existing)) {
+                        lastDepartTimes.put(v, vehicleDepart);
+                    }
+
+                    // Calculer l'heure de retour commune pour ce véhicule à partir de son départ effectif
                     Timestamp vehicleRetour = null;
                     try {
-                        vehicleRetour = Reservation.calculHeureRetourFromDepart(intervalDepart, vReservations);
+                        vehicleRetour = Reservation.calculHeureRetourFromDepart(vehicleDepart, vReservations);
                     } catch (SQLException ignore) {
                     }
 
-                    // Persister chaque assignation avec la même heure de retour
+                    // Persister chaque assignation avec l'heure de départ et retour du véhicule
                     for (Reservation r : vReservations) {
-                        persistAssignationWithRetour(v, r, intervalDepart, vehicleRetour);
+                        persistAssignationWithRetour(v, r, vehicleDepart, vehicleRetour);
                     }
                 }
             }
