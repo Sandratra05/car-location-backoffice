@@ -296,6 +296,48 @@ public class Reservation {
     }
 
     /**
+     * Calcule l'heure de retour à l'aéroport à partir d'une heure de départ donnée
+     * et de la liste des réservations (pour calculer la distance totale du trajet).
+     *
+     * @param depart Heure de départ du véhicule
+     * @param resa Liste des réservations assignées au véhicule
+     * @return Heure de retour à l'aéroport
+     */
+    public static Timestamp calculHeureRetourFromDepart(Timestamp depart, List<Reservation> resa) throws SQLException {
+        if (depart == null || resa == null || resa.isEmpty()) return null;
+
+        ParametreRepository prefRepo = new ParametreRepository();
+        Parametre p = prefRepo.findLatest();
+
+        // Calculer la distance totale en utilisant VehiculeService
+        VehiculeService vs = new VehiculeService();
+        BigDecimal totalKm = vs.calculTotalDistance(resa);
+
+        if (totalKm == null || totalKm.compareTo(BigDecimal.ZERO) <= 0) return depart;
+
+        if (p == null || p.getVitesseMoyenneKmh() == null) return depart;
+
+        BigDecimal vitesse = p.getVitesseMoyenneKmh();
+        if (vitesse.compareTo(BigDecimal.ZERO) <= 0) return depart;
+
+        // Temps en heures = km / vitesse
+        BigDecimal seconds = totalKm
+                .divide(vitesse, 6, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(3600));
+
+        long travelMs = seconds
+                .multiply(BigDecimal.valueOf(1000))
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValue();
+
+        // Arrondir à la minute la plus proche
+        long travelMinutes = Math.round(travelMs / 60000.0);
+        long travelMsRounded = travelMinutes * 60000;
+
+        return new Timestamp(depart.getTime() + travelMsRounded);
+    }
+
+    /**
      * Retourne la liste des réservations dont l'heure d'arrivée est comprise
      * entre la date passée en argument et cette date + le temps d'attente
      * (temps d'attente pris depuis le dernier enregistrement de la table
