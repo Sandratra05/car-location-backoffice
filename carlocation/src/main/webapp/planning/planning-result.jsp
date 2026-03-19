@@ -2,6 +2,7 @@
 <%@ page import="com.example.entity.Vehicule" %>
 <%@ page import="com.example.entity.Reservation" %>
 <%@ page import="java.util.*" %>
+<%@ page import="java.util.Collections" %>
 <%@ page import="java.text.SimpleDateFormat" %>
 <%@ page import="java.util.Comparator" %>
 <%@ page import="java.math.BigDecimal" %>
@@ -32,7 +33,26 @@
                 if (assignments == null || assignments.isEmpty()) {
             %>
                 <div class="alert">Aucune assignation trouvée pour cette date.</div>
-            <% } else { %>
+            <% } else {
+                // Récupérer les heures de départ pour le tri
+                final Map<Vehicule, Timestamp> departTimesMap = (Map<Vehicule, Timestamp>) request.getAttribute("departTimes");
+
+                // Créer une liste triée par heure de départ
+                List<Vehicule> sortedVehicles = new ArrayList<Vehicule>(assignments.keySet());
+                Collections.sort(sortedVehicles, new Comparator<Vehicule>() {
+                    public int compare(Vehicule v1, Vehicule v2) {
+                        Timestamp t1 = departTimesMap != null ? departTimesMap.get(v1) : null;
+                        Timestamp t2 = departTimesMap != null ? departTimesMap.get(v2) : null;
+                        if (t1 == null && t2 == null) return 0;
+                        if (t1 == null) return 1;
+                        if (t2 == null) return -1;
+                        int cmp = t1.compareTo(t2);
+                        if (cmp != 0) return cmp;
+                        // Si même heure, trier par référence véhicule
+                        return v1.getReference().compareTo(v2.getReference());
+                    }
+                });
+            %>
 
                 <table class="table table-striped" style="width:100%; border-collapse:collapse; margin-bottom:20px; margin-top:8px;">
                     <thead style="background:#1e3a5f; text-align:left;">
@@ -49,14 +69,14 @@
                     </thead>
                     <tbody>
                     <%
-                        for (Object key : assignments.keySet()) {
-                            Vehicule v = (Vehicule) key;
-                            List<Reservation> resList = (List<Reservation>) assignments.get(key);
+                        String lastDepartTime = "";
+                        for (Vehicule v : sortedVehicles) {
+                            List<Reservation> resList = (List<Reservation>) assignments.get(v);
                             if (resList == null || resList.isEmpty()) continue;
 
                             // Récupérer les données préparées
                             String trajet = (String) ((Map) request.getAttribute("routes")).get(v);
-                            Timestamp vehicleDepart = (Timestamp) ((Map) request.getAttribute("departTimes")).get(v);
+                            Timestamp vehicleDepart = departTimesMap != null ? departTimesMap.get(v) : null;
                             Timestamp vehicleReturn = (Timestamp) ((Map) request.getAttribute("returnTimes")).get(v);
                             BigDecimal km = (BigDecimal) ((Map) request.getAttribute("kmMap")).get(v);
                             Integer nbTrajets = (Integer) ((Map) request.getAttribute("trajetsMap")).get(v);
@@ -64,6 +84,10 @@
                             Integer occupied = (Integer) ((Map) request.getAttribute("occupiedMap")).get(v);
                             Integer tempsAttenteMin = (Integer) request.getAttribute("tempsAttenteMin");
 
+                            // Vérifier si c'est un nouveau groupe horaire
+                            String currentDepartTime = vehicleDepart != null ? timeFmt.format(vehicleDepart) : "-";
+                            boolean isNewTimeGroup = !currentDepartTime.equals(lastDepartTime);
+                            lastDepartTime = currentDepartTime;
 
                             // Construire détails réservations
                             String details = "";
@@ -72,6 +96,13 @@
                                 details += "- Clients num " + r.getIdReservation() + " <br/> ( <strong> " + r.getNbPassager() + " prs </strong> - " + (r.getHotel() != null ? r.getHotel().getLibelle() : "-") + ")";
                             }
                     %>
+                        <% if (isNewTimeGroup) { %>
+                        <tr style="background:#e8f4f8;">
+                            <td colspan="7" style="padding:8px; border:1px solid #ddd; font-weight:bold; color:#1e3a5f;">
+                                Départ à <%= currentDepartTime %>
+                            </td>
+                        </tr>
+                        <% } %>
                         <tr>
                             <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
                                 <strong><%= v.getReference() %></strong><br/>
