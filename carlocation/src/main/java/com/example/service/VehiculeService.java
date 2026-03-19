@@ -13,6 +13,7 @@ import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -273,36 +274,78 @@ public class VehiculeService {
     }
 
     /**
-     * Retourne l'heure de disponibilité de chaque véhicule (= heure de retour du dernier trajet).
-     * Si le véhicule n'a pas de trajet avant l'intervalle, il est disponible immédiatement (null).
+     * Retourne l'heure de disponibilité de chaque véhicule.
+     * L'heure de disponibilité = max(heure_retour_dernier_trajet, heure_table_disponibilite)
+     * Si le véhicule n'a pas de contrainte, il est disponible immédiatement (null).
      */
     public Map<Vehicule, Timestamp> findVehicleAvailability(List<Vehicule> vehicles, Timestamp beforeTime) throws SQLException {
         Map<Vehicule, Timestamp> availability = new HashMap<>();
         if (vehicles == null || vehicles.isEmpty()) return availability;
 
-        String sql = """
+        // 1. Récupérer l'heure de retour du dernier trajet pour chaque véhicule
+        String sqlLastReturn = """
             SELECT id_vehicule, MAX(date_retour) as last_return
             FROM assignation
             WHERE date_retour <= ?
             GROUP BY id_vehicule
         """;
 
+        Map<Long, Timestamp> lastReturns = new HashMap<>();
         try (Connection conn = DbConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+             PreparedStatement stmt = conn.prepareStatement(sqlLastReturn)) {
 
             stmt.setTimestamp(1, beforeTime);
 
-            Map<Long, Timestamp> lastReturns = new HashMap<>();
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     lastReturns.put(rs.getLong("id_vehicule"), rs.getTimestamp("last_return"));
                 }
             }
+        }
 
-            for (Vehicule v : vehicles) {
-                Timestamp lastReturn = lastReturns.get(v.getId());
-                availability.put(v, lastReturn); // null si pas de trajet précédent
+        // 2. Récupérer les contraintes de disponibilité de la table `disponibilite`
+        Date dateOnly = new Date(beforeTime.getTime());
+        String sqlDisponibilite = """
+            SELECT id_vehicule, date_disponible, heure_disponible
+            FROM disponibilite
+            WHERE date_disponible = ?
+        """;
+
+        Map<Long, Timestamp> scheduledAvailability = new HashMap<>();
+        try (Connection conn = DbConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sqlDisponibilite)) {
+
+            stmt.setDate(1, dateOnly);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Date d = rs.getDate("date_disponible");
+                    Time t = rs.getTime("heure_disponible");
+                    if (d != null && t != null) {
+                        Timestamp ts = Timestamp.valueOf(d.toLocalDate().atTime(t.toLocalTime()));
+                        scheduledAvailability.put(rs.getLong("id_vehicule"), ts);
+                    }
+                }
             }
+        }
+
+        // 3. Pour chaque véhicule, l'heure de disponibilité = max(lastReturn, scheduledAvailability)
+        for (Vehicule v : vehicles) {
+            Timestamp lastReturn = lastReturns.get(v.getId());
+            Timestamp scheduled = scheduledAvailability.get(v.getId());
+
+            Timestamp effectiveAvailability = null;
+
+            if (lastReturn != null && scheduled != null) {
+                // Prendre le plus tardif
+                effectiveAvailability = lastReturn.after(scheduled) ? lastReturn : scheduled;
+            } else if (lastReturn != null) {
+                effectiveAvailability = lastReturn;
+            } else if (scheduled != null) {
+                effectiveAvailability = scheduled;
+            }
+
+            availability.put(v, effectiveAvailability); // null si pas de contrainte
         }
 
         return availability;
