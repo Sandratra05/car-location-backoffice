@@ -1,0 +1,24 @@
+TL : Sandratra ETU003126
+Dev Framework : Sariaka ETU003378 sy Finoana ETU003203
+
+Todo Sprint 7 :
+
+Finoana : 
+    - modifier assignByIntervals pour permettre la division d'une reservation
+    Les reservations les plus nombreux seront les priorites 
+    ex : 
+        Voitures V1 (5 places), V2 (3 places) et V3 (2 places)
+        Resa : R1 (9 passagers), R2 (3 passagers)
+
+        Assignation : 
+            V1 = {R1 (5 passagers)} - 0 places restants
+            V2 = {R1 (3 passagers)} - 0 places restants
+            V3 = {R1 (1 passagers)} - 1 places restantes
+
+    Meme si la resa R2 pouvait etre assigne a V2, on priorise les resa avec les plus grande nb de passagers
+
+Sariaka : 
+    - modifier la page planning-result.jsp pour rendre lisible la lecture du tableau 
+    ex : Trier par heure de depart pour regrouper les vehicules partis en meme temps
+
+    
