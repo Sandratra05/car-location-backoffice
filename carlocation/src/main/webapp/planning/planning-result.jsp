@@ -69,7 +69,7 @@
                             String details = "";
                             for (Reservation r : resList) {
                                 if (!details.isEmpty()) details += "<br/>";
-                                details += "Resa num " + r.getIdReservation() + " (" + r.getNbPassager() + " prs - " + (r.getHotel() != null ? r.getHotel().getLibelle() : "-") + ")";
+                                details += "- Clients num " + r.getIdReservation() + " <br/> ( <strong> " + r.getNbPassager() + " prs </strong> - " + (r.getHotel() != null ? r.getHotel().getLibelle() : "-") + ")";
                             }
                     %>
                         <tr>
