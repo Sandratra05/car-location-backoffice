@@ -101,11 +101,11 @@ INSERT INTO parametre (vitesse_moyenne_kmh, temps_attente_min) VALUES
 
 -- VEHICULES
 INSERT INTO vehicule (reference, nb_place, type_carburant) VALUES
-  ('VH-001', 5, 'DIESEL'),
-  ('VH-002', 3, 'ESSENCE'),
-  ('VH-003', 2,  'HYBRIDE');
-  -- ('VH-004', 18, 'DIESEL'),
-  -- ('VH-005', 10,  'DIESEL');
+  --('VH-001', 5, 'DIESEL'),
+  --('VH-002', 3, 'ESSENCE'),
+  --('VH-003', 2,  'HYBRIDE');
+   ('VH-004', 18, 'ESSENCE'),
+   ('VH-005', 10,  'DIESEL');
 
 -- RESERVATIONS (4 sur la même date 2026-03-15, 1 sur 2026-03-16)
 -- INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) VALUES
@@ -116,9 +116,9 @@ INSERT INTO vehicule (reference, nb_place, type_carburant) VALUES
 --   (3,  TIMESTAMP '2026-03-16 10:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C005');
 
 -- POUR TESTER LA SUPERPOSITION DES RESERVATIONS (exemple : 8 passagers à 8h puis 2 passagers à 8h15, alors que le véhicule a une capacité de 10, on doit pouvoir affecter les 2 passagers de la 2ème réservation au même véhicule que les 8 passagers de la 1ère réservation)
-INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) VALUES
- (9,  TIMESTAMP '2026-03-15 08:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
- (3, TIMESTAMP '2026-03-15 08:15:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002');
+--INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) VALUES
+-- (9,  TIMESTAMP '2026-03-15 08:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
+-- (3, TIMESTAMP '2026-03-15 08:15:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002');
 --  (3, TIMESTAMP '2026-03-15 08:30:00', (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 'C004'),
 --  (5,  TIMESTAMP '2026-03-15 08:25:00', (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 'C003'),
  INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) VALUES
