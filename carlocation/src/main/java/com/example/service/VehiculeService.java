@@ -437,7 +437,9 @@ public class VehiculeService {
                 // Regrouper les réservations par véhicule pour calculer l'heure de retour commune
                 Map<Vehicule, List<Reservation>> vehicleReservations = new HashMap<>();
                 for (AssignPair pair : assignedPairs) {
-                    vehicleReservations.computeIfAbsent(pair.vehicule, k -> new ArrayList<>()).add(pair.reservation);
+                    if (pair.vehicule != null) {
+                        vehicleReservations.computeIfAbsent(pair.vehicule, k -> new ArrayList<>()).add(pair.reservation);
+                    }
                 }
 
                 // Persister les assignations avec l'heure de retour calculée à partir du départ commun
