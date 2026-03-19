@@ -308,7 +308,7 @@ public class VehiculeService {
      *   * assigner greedy en cherchant la plus petite capacité restante qui contient la resa
      *   * en cas d'égalité de capacité, utiliser `chooseByTrajetsThenCarburant`
      *   * persister chaque assignation dans la table `assignation`
-     */
+     *  */
     public Map<Vehicule, List<Reservation>> assignByIntervals(List<Reservation> allReservations, int taMinutes) throws SQLException {
         Map<Vehicule, List<Reservation>> result = new HashMap<>();
         if (allReservations == null || allReservations.isEmpty()) return result;
@@ -368,25 +368,52 @@ public class VehiculeService {
             Set<Vehicule> vehiclesUsedInInterval = new HashSet<>();
             List<AssignPair> assignedPairs = new ArrayList<>();
 
-            for (Reservation r : batch) {
+            for (int i = 0; i < batch.size(); i++) {
+                Reservation r = batch.get(i);
                 int need = r.getNbPassager() != null ? r.getNbPassager() : 0;
                 if (need <= 0) continue;
 
-                if (maxVehicleCapacity > 0 && need > maxVehicleCapacity) {
-                    // Réservation impossible (aucun véhicule n'a assez de places):
-                    // on la retire du cycle d'assignation, elle restera "non assignée" côté affichage.
-                    unassigned.remove(r);
-                    continue;
-                }
-
                 Vehicule chosen = chooseVehicleForReservation(vehicles, remaining, need);
-                if (chosen == null) continue;
+                
+                if (chosen != null) {
+                    // ASSIGNATION NORMALE (le véhicule a assez de place)
+                    result.computeIfAbsent(chosen, k -> new ArrayList<>()).add(r);
+                    remaining.put(chosen, remaining.getOrDefault(chosen, 0) - need);
 
-                result.computeIfAbsent(chosen, k -> new ArrayList<>()).add(r);
-                remaining.put(chosen, remaining.getOrDefault(chosen, 0) - need);
+                    vehiclesUsedInInterval.add(chosen);
+                    assignedPairs.add(new AssignPair(chosen, r));
+                } else {
+                   
+                    // Si aucun véhicule ne peut prendre tout le monde, on cherche celui qui a le plus de places restantes
+                    Vehicule maxCapVehicle = null;
+                    int maxCap = 0;
+                    for (Vehicule v : vehicles) {
+                        int remCap = remaining.getOrDefault(v, 0);
+                        if (remCap > maxCap) {
+                            maxCap = remCap;
+                            maxCapVehicle = v;
+                        }
+                    }
 
-                vehiclesUsedInInterval.add(chosen);
-                assignedPairs.add(new AssignPair(chosen, r));
+                    if (maxCapVehicle != null && maxCap > 0) {
+                        // Création de 2 sous-réservations
+                        Reservation partToAssign = cloneReservation(r, maxCap);
+                        Reservation partRemaining = cloneReservation(r, need - maxCap);
+
+                        // On assigne la partie qui encaisse la capacité maximale du véhicule
+                        result.computeIfAbsent(maxCapVehicle, k -> new ArrayList<>()).add(partToAssign);
+                        remaining.put(maxCapVehicle, 0); // Le véhicule est plein
+                        vehiclesUsedInInterval.add(maxCapVehicle);
+                        assignedPairs.add(new AssignPair(maxCapVehicle, partToAssign));
+
+                        // On réinsère le RESTE des passagers dans la liste à traiter juste après
+                        batch.add(i + 1, partRemaining);
+
+                        // Important: on "fake" l'assignation de la réservation d'origine 
+                        // pour qu'elle soit considérée comme traitée et ne soit pas reportée indéfiniment.
+                        assignedPairs.add(new AssignPair(null, r));
+                    }
+                }
             }
 
             // Calculer l'heure de départ de l'intervalle uniquement à partir des réservations assignées
@@ -491,8 +518,7 @@ public class VehiculeService {
 
         return result;
     }
-
-    private static class AssignPair {
+       private static class AssignPair {
         private final Vehicule vehicule;
         private final Reservation reservation;
 
@@ -1024,5 +1050,18 @@ public class VehiculeService {
 
     public Integer countTrajets(Long vehiculeId) throws SQLException {
         return vehiculeRepository.countTrajets(vehiculeId);
+    }
+    private Reservation cloneReservation(Reservation r, int newNbPassagers) {
+        if (r == null) return null;
+        
+        // On utilise le constructeur complet de votre entité Reservation:
+        // public Reservation(Integer idReservation, Integer nbPassager, Timestamp dateHeureArrivee, Hotel hotel, String idClient)
+        return new Reservation(
+            r.getIdReservation(),
+            newNbPassagers, 
+            r.getDateHeureArrivee(),
+            r.getHotel(),
+            r.getIdClient()
+        );
     }
 }
