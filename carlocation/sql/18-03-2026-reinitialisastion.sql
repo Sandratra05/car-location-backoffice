@@ -121,6 +121,23 @@ INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) V
  (3, TIMESTAMP '2026-03-15 08:15:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002');
 --  (3, TIMESTAMP '2026-03-15 08:30:00', (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 'C004'),
 --  (5,  TIMESTAMP '2026-03-15 08:25:00', (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 'C003'),
+ INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) VALUES
+  (13,  TIMESTAMP '2026-03-15 08:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
+  (7, TIMESTAMP '2026-03-15 08:15:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002'),
+  (3, TIMESTAMP '2026-03-15 08:30:00', (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 'C004'),
+  (5,  TIMESTAMP '2026-03-15 08:25:00', (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 'C003'),
+  (1,  TIMESTAMP '2026-03-15 08:25:00', (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 'C003'),
+ (15,  TIMESTAMP '2026-03-15 12:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
+ (5,  TIMESTAMP '2026-03-15 12:10:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
+  (16, TIMESTAMP '2026-03-15 15:10:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002'),
+  (8, TIMESTAMP '2026-03-15 15:20:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002'),
+  (8, TIMESTAMP '2026-03-15 17:15:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002'),
+  (8, TIMESTAMP '2026-03-15 12:20:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002');
+--INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) VALUES
+-- (13,  TIMESTAMP '2026-03-15 08:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
+-- (6, TIMESTAMP '2026-03-15 08:15:00', (SELECT id_hotel FROM hotel WHERE code='LOUVRE-01' LIMIT 1), 'C002'),
+-- (3, TIMESTAMP '2026-03-15 08:30:00', (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 'C004'),
+-- (1,  TIMESTAMP '2026-03-15 09:35:00', (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 'C003');
 --  (1,  TIMESTAMP '2026-03-15 08:25:00', (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 'C003'),
 -- (15,  TIMESTAMP '2026-03-15 12:00:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),
 -- (5,  TIMESTAMP '2026-03-15 12:10:00', (SELECT id_hotel FROM hotel WHERE code='IBIS-01' LIMIT 1), 'C001'),

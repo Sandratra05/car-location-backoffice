@@ -434,10 +434,27 @@ public class VehiculeService {
                     }
                 }
 
-                // persister les assignations de cet intervalle avec la même heure de départ
+                // Regrouper les réservations par véhicule pour calculer l'heure de retour commune
+                Map<Vehicule, List<Reservation>> vehicleReservations = new HashMap<>();
                 for (AssignPair pair : assignedPairs) {
-                    if (pair.vehicule != null) {
-                        persistAssignation(pair.vehicule, pair.reservation, intervalDepart);
+                    vehicleReservations.computeIfAbsent(pair.vehicule, k -> new ArrayList<>()).add(pair.reservation);
+                }
+
+                // Persister les assignations avec l'heure de retour calculée à partir du départ commun
+                for (Map.Entry<Vehicule, List<Reservation>> entry : vehicleReservations.entrySet()) {
+                    Vehicule v = entry.getKey();
+                    List<Reservation> vReservations = entry.getValue();
+
+                    // Calculer l'heure de retour commune pour ce véhicule
+                    Timestamp vehicleRetour = null;
+                    try {
+                        vehicleRetour = Reservation.calculHeureRetourFromDepart(intervalDepart, vReservations);
+                    } catch (SQLException ignore) {
+                    }
+
+                    // Persister chaque assignation avec la même heure de retour
+                    for (Reservation r : vReservations) {
+                        persistAssignationWithRetour(v, r, intervalDepart, vehicleRetour);
                     }
                 }
             }
@@ -621,6 +638,26 @@ public class VehiculeService {
         } catch (Exception ignore) {
             // laisser null si non calculable
         }
+
+        // Eviter de créer des assignations avec dates NULL (ça fausse la disponibilité SQL)
+        try {
+            if (a.getDateDepart() != null && a.getDateRetour() != null) {
+                a.save();
+            }
+        } catch (SQLException ignore) {
+        }
+    }
+
+    /**
+     * Persiste une assignation avec une heure de retour pré-calculée
+     * (basée sur le départ commun de l'intervalle et la distance totale du trajet).
+     */
+    private void persistAssignationWithRetour(Vehicule chosen, Reservation r, Timestamp intervalDepart, Timestamp vehicleRetour) {
+        Assignation a = new Assignation();
+        a.setVehicule(chosen);
+        a.setReservation(r);
+        a.setDateDepart(intervalDepart);
+        a.setDateRetour(vehicleRetour);
 
         // Eviter de créer des assignations avec dates NULL (ça fausse la disponibilité SQL)
         try {
