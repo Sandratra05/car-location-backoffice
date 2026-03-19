@@ -41,6 +41,8 @@
                             <th style="padding:8px; border:1px solid #ddd;">Réservations</th>
                             <th style="padding:8px; border:1px solid #ddd;">Trajet</th>
                             <th style="padding:8px; border:1px solid #ddd;">Km parcouru</th>
+                            
+                            <th style="padding:8px; border:1px solid #ddd;">Places</th>
                             <th style="padding:8px; border:1px solid #ddd;">Départ véhicule</th>
                             <th style="padding:8px; border:1px solid #ddd;">Retour aéroport</th>
                         </tr>
@@ -57,6 +59,11 @@
                             Timestamp vehicleDepart = (Timestamp) ((Map) request.getAttribute("departTimes")).get(v);
                             Timestamp vehicleReturn = (Timestamp) ((Map) request.getAttribute("returnTimes")).get(v);
                             BigDecimal km = (BigDecimal) ((Map) request.getAttribute("kmMap")).get(v);
+                            Integer nbTrajets = (Integer) ((Map) request.getAttribute("trajetsMap")).get(v);
+                            String places = (String) ((Map) request.getAttribute("placesMap")).get(v);
+                            Integer occupied = (Integer) ((Map) request.getAttribute("occupiedMap")).get(v);
+                            Integer tempsAttenteMin = (Integer) request.getAttribute("tempsAttenteMin");
+
 
                             // Construire détails réservations
                             String details = "";
@@ -74,6 +81,10 @@
                             <td style="padding:8px; border:1px solid #ddd; vertical-align:top;"><%= trajet %></td>
                             <td style="padding:8px; border:1px solid #ddd; vertical-align:top; text-align:right;">
                                 <%= km != null ? km.setScale(2, java.math.RoundingMode.HALF_UP) + " km" : "-" %>
+                            </td>
+                            <td style="padding:8px; border:1px solid #ddd; vertical-align:top; text-align:center;">
+                                <% int tot = v.getNbPlace(); int occ = 0; for (Reservation rr : resList) { if (rr.getNbPassager() != null) occ += rr.getNbPassager(); } int free = tot - occ; %>
+                                <%= occ %>/<%= tot %> places<%= free > 0 ? " (" + free + " libres)" : " (complet)" %>
                             </td>
                             <td style="padding:8px; border:1px solid #ddd; vertical-align:top;">
                                 <%= vehicleDepart != null ? timeFmt.format(vehicleDepart) : "-" %>
@@ -101,20 +112,50 @@
                                     <th style="padding:8px; border:1px solid #ddd;">Num Réservation</th>
                                     <th style="padding:8px; border:1px solid #ddd;">Nb Passagers</th>
                                     <th style="padding:8px; border:1px solid #ddd;">Hôtel</th>
+                                    <th style="padding:8px; border:1px solid #ddd;">Statut</th>
                                 </tr>
                             </thead>
                             <tbody>
                             <% for (Reservation r : unassigned) { %>
                                 <tr>
-                                    <td style="padding:8px; border:1px solid #ddd;">#<%= r.getIdReservation() %></td>
+                                    <td style="padding:8px; border:1px solid #ddd;">#<%= r.getIdReservation() %> (reportée)</td>
                                     <td style="padding:8px; border:1px solid #ddd; text-align:right;"><%= r.getNbPassager() %></td>
                                     <td style="padding:8px; border:1px solid #ddd;"><%= r.getHotel() != null ? r.getHotel().getLibelle() : "-" %></td>
+                                    <td style="padding:8px; border:1px solid #ddd; color:orange; font-weight:bold;">Reportée</td>
                                 </tr>
                             <% } %>
                             </tbody>
                         </table>
                 </div>
         <%  } %>
+
+        <%
+            Map trajetsSummary = (Map) request.getAttribute("trajetsSummary");
+            if (trajetsSummary != null && !trajetsSummary.isEmpty()) {
+        %>
+            <hr/>
+            <div class="card">
+                <h3>Nombre de trajets par véhicule (aujourd'hui)</h3>
+                <table style="width:100%; border-collapse:collapse; margin-top:8px;">
+                    <thead style="background:#f4f4f4; text-align:left;">
+                        <tr>
+                            <th style="padding:6px; border:1px solid #ddd;">Véhicule</th>
+                            <th style="padding:6px; border:1px solid #ddd;">Trajets</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <% for (Object k : trajetsSummary.keySet()) {
+                           Object val = trajetsSummary.get(k);
+                    %>
+                        <tr>
+                            <td style="padding:6px; border:1px solid #ddd;"><strong><%= k %></strong></td>
+                            <td style="padding:6px; border:1px solid #ddd;"><%= val != null ? val : 0 %></td>
+                        </tr>
+                    <% } %>
+                    </tbody>
+                </table>
+            </div>
+        <% } %>
     </div>
 </div>
 </body>

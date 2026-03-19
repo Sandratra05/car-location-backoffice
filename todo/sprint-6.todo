@@ -39,9 +39,9 @@ Tâches principales :
 
 
 - Sariaka : DateDepart réel + Non-assignés
-    * Modifier la fonction DateDepart (pour la grappe de réservations) `getHeureDepartAvecTA` :
+    * (DONE) Modifier la fonction DateDepart (pour la grappe de réservations) `getHeureDepartAvecTA` :
         # Exclure les réservations non-assignées du l'intervalle précédent pour le calcul de l'heure du "dernier vol" (dateDepart de la grappe)
-    * Gérer réservations non-assignées :
+    * (DONE) Gérer réservations non-assignées :
         # Renvoyer au prochain intervalle (TA suivant) les réservations sans véhicule. Reconsidérées à chaque intervalle (cycle continu).
         # Mettre à jour logique de regroupement intervalle. (ex: la réservation de 8:00 non assignée rejoint le pool de 8:30)
 

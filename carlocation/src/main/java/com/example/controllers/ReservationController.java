@@ -12,6 +12,8 @@ import com.example.entity.Hotel;
 import com.example.entity.Vehicule;
 import com.example.service.VehiculeService;
 import com.example.service.TokenService;
+import com.example.repository.ParametreRepository;
+import com.example.entity.Parametre;
 
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -47,11 +49,20 @@ public class ReservationController {
             Timestamp heureDepart = Reservation.getHeureDepartAvecTA(ts);
             if (heureDepart == null) heureDepart = ts;
 
+            // Récupérer le temps d'attente
+            ParametreRepository paramRepo = new ParametreRepository();
+            Parametre p = paramRepo.findLatest();
+            Integer tempsAttenteMin = (p != null && p.getTempsAttenteMin() != null) ? p.getTempsAttenteMin() : 30; // default 30 min
+
             // Préparer les données supplémentaires pour l'affichage
             Map<Vehicule, String> routes = new HashMap<>();
             Map<Vehicule, Timestamp> departTimes = new HashMap<>();
             Map<Vehicule, Timestamp> returnTimes = new HashMap<>();
             Map<Vehicule, java.math.BigDecimal> kmMap = new HashMap<>();
+            Map<Vehicule, Integer> trajetsMap = new HashMap<>();
+            Map<String, Integer> trajetsSummary = new HashMap<>();
+            Map<Vehicule, String> placesMap = new HashMap<>();
+            Map<Vehicule, Integer> occupiedMap = new HashMap<>();
 
             Map<Vehicule, Timestamp> intervalDepartTimes = vs.getLastDepartTimes();
 
@@ -73,6 +84,26 @@ public class ReservationController {
                     kmMap.put(v, java.math.BigDecimal.ZERO);
                 }
 
+                // Nb trajets
+                try {
+                    int nbTrajets = vs.countTrajets(v.getId());
+                    trajetsMap.put(v, nbTrajets);
+                    trajetsSummary.put(v.getReference(), nbTrajets);
+                } catch (Exception e) {
+                    trajetsMap.put(v, 0);
+                    trajetsSummary.put(v.getReference(), 0);
+                }
+
+                // Places occupées / total
+                int occupied = 0;
+                for (Reservation r : resas) {
+                    if (r.getNbPassager() != null) {
+                        occupied += r.getNbPassager();
+                    }
+                }
+                placesMap.put(v, occupied + "/" + v.getNbPlace());
+                occupiedMap.put(v, occupied);
+
                 // Heure de départ = heure de départ de l'intervalle (commune à tous les véhicules de l'intervalle)
                 Timestamp departInterval = intervalDepartTimes.get(v);
                 departTimes.put(v, departInterval != null ? departInterval : heureDepart);
@@ -86,12 +117,22 @@ public class ReservationController {
                 returnTimes.put(v, ret);
             }
 
+            // Récupérer les réservations non assignées
+            List<Reservation> allReservations = Reservation.findReservationsByDateASC(ts);
+            List<Reservation> unassigned = vs.findUnassignedReservations(allReservations, assignments);
+
             mv.setView("planning-result.jsp");
             mv.addAttribute("assignments", assignments);
             mv.addAttribute("routes", routes);
             mv.addAttribute("departTimes", departTimes);
             mv.addAttribute("returnTimes", returnTimes);
             mv.addAttribute("kmMap", kmMap);
+            mv.addAttribute("trajetsMap", trajetsMap);
+            mv.addAttribute("trajetsSummary", trajetsSummary);
+            mv.addAttribute("placesMap", placesMap);
+            mv.addAttribute("occupiedMap", occupiedMap);
+            mv.addAttribute("tempsAttenteMin", tempsAttenteMin);
+            mv.addAttribute("unassigned", unassigned);
         } catch (Exception e) {
             mv.setView("planning-form.jsp");
             mv.addAttribute("error", "Erreur lors de la génération du planning: " + e.getMessage());
