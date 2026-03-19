@@ -108,10 +108,12 @@ public class ReservationController {
                 Timestamp departInterval = intervalDepartTimes.get(v);
                 departTimes.put(v, departInterval != null ? departInterval : heureDepart);
 
+                // Heure de retour = départ véhicule + durée du trajet (basée sur la distance totale)
                 Timestamp ret = null;
                 try {
-                    if (!resas.isEmpty()) {
-                        ret = resas.get(0).calculHeureRetourTotal(resas);
+                    Timestamp depart = departInterval != null ? departInterval : heureDepart;
+                    if (!resas.isEmpty() && depart != null) {
+                        ret = Reservation.calculHeureRetourFromDepart(depart, resas);
                     }
                 } catch (Exception e) {}
                 returnTimes.put(v, ret);
