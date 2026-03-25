@@ -595,8 +595,8 @@ public class VehiculeService {
                             remainingSpace = 0;
                             toProcess.remove(closest);
 
-                            // Ajouter le reste au début de toProcess pour traitement immédiat
-                            toProcess.add(0, partRemaining);
+                            // Insérer le reste à la bonne position pour maintenir l'ordre décroissant
+                            insertSortedDesc(toProcess, partRemaining);
                             lastUnassignedParts.add(partRemaining);
                         }
                     }
@@ -616,8 +616,8 @@ public class VehiculeService {
                             assignedPairs.add(new AssignPair(bestForSplit, partToAssign));
                             toProcess.remove(0);
 
-                            // Ajouter le reste AU DÉBUT de toProcess pour qu'il soit traité immédiatement
-                            toProcess.add(0, partRemaining);
+                            // Insérer le reste à la bonne position pour maintenir l'ordre décroissant
+                            insertSortedDesc(toProcess, partRemaining);
                             lastUnassignedParts.add(partRemaining);
 
                             progress = true;
@@ -941,6 +941,28 @@ public class VehiculeService {
         Map<Vehicule, Integer> remaining = new HashMap<>();
         for (Vehicule v : vehicles) remaining.put(v, v.getNbPlace());
         return remaining;
+    }
+
+    /**
+     * Insère une réservation dans une liste triée par ordre décroissant de passagers.
+     * Maintient l'ordre décroissant après l'insertion.
+     */
+    private void insertSortedDesc(List<Reservation> list, Reservation r) {
+        if (r == null) return;
+        int passengers = r.getNbPassager() != null ? r.getNbPassager() : 0;
+
+        // Trouver la position d'insertion pour maintenir l'ordre décroissant
+        int insertPos = 0;
+        for (int i = 0; i < list.size(); i++) {
+            Reservation current = list.get(i);
+            int currentPass = current.getNbPassager() != null ? current.getNbPassager() : 0;
+            if (passengers > currentPass) {
+                insertPos = i;
+                break;
+            }
+            insertPos = i + 1;
+        }
+        list.add(insertPos, r);
     }
 
     private Vehicule chooseVehicleForReservation(List<Vehicule> vehicles, Map<Vehicule, Integer> remaining, int need) {
