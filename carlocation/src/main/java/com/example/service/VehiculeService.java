@@ -532,6 +532,10 @@ public class VehiculeService {
             Set<Vehicule> vehiclesUsedInInterval = new HashSet<>();
             List<AssignPair> assignedPairs = new ArrayList<>();
 
+            // Set pour tracker les réservations qui ont été splittées
+            // (pour prioriser leurs restes lors du remplissage)
+            Set<Integer> splitClientIds = new HashSet<>();
+
             // Liste des réservations à traiter dans ce batch (copie pour modification)
             // Trier UNE SEULE FOIS au début par ordre décroissant de passagers
             List<Reservation> toProcess = new ArrayList<>(batch);
@@ -545,11 +549,15 @@ public class VehiculeService {
             while (!toProcess.isEmpty()) {
                 boolean progress = false;
 
-                // Prendre la première réservation (la plus grande)
-                Reservation r = toProcess.get(0);
+                // Prendre la prochaine réservation à traiter
+                // PRIORITÉ: d'abord les restes (leftovers) des clients déjà partiellement assignés
+                Reservation r = findNextReservationToProcess(toProcess, splitClientIds);
+                if (r == null) {
+                    r = toProcess.get(0);
+                }
                 int need = r.getNbPassager() != null ? r.getNbPassager() : 0;
                 if (need <= 0) {
-                    toProcess.remove(0);
+                    toProcess.remove(r);
                     continue;
                 }
 
@@ -562,13 +570,17 @@ public class VehiculeService {
                     remaining.put(chosen, remaining.get(chosen) - need);
                     vehiclesUsedInInterval.add(chosen);
                     assignedPairs.add(new AssignPair(chosen, r));
-                    toProcess.remove(0);
+                    toProcess.remove(r);
+
+                    // Retirer de lastUnassignedParts si c'était un reste
+                    lastUnassignedParts.remove(r);
+
                     progress = true;
 
                     // 2. REMPLISSAGE : chercher les réservations les plus proches des places restantes
                     int remainingSpace = remaining.get(chosen);
                     while (remainingSpace > 0 && !toProcess.isEmpty()) {
-                        Reservation closest = findClosestReservationToFill(toProcess, remainingSpace);
+                        Reservation closest = findClosestReservationToFill(toProcess, remainingSpace, splitClientIds);
                         if (closest == null) break;
 
                         int closestPass = closest.getNbPassager() != null ? closest.getNbPassager() : 0;
@@ -584,6 +596,9 @@ public class VehiculeService {
                             remainingSpace = remaining.get(chosen);
                             assignedPairs.add(new AssignPair(chosen, closest));
                             toProcess.remove(closest);
+
+                            // Retirer de lastUnassignedParts si c'était un reste
+                            lastUnassignedParts.remove(closest);
                         } else {
                             // SPLIT pendant le remplissage : la réservation ne rentre pas entièrement
                             Reservation partToAssign = cloneReservation(closest, remainingSpace);
@@ -594,6 +609,14 @@ public class VehiculeService {
                             remaining.put(chosen, 0);
                             remainingSpace = 0;
                             toProcess.remove(closest);
+
+                            // Retirer l'ancien reste et ajouter le nouveau
+                            lastUnassignedParts.remove(closest);
+
+                            // Tracker cette réservation comme splittée pour prioriser ses restes
+                            if (closest.getIdReservation() != null) {
+                                splitClientIds.add(closest.getIdReservation());
+                            }
 
                             // Insérer le reste à la bonne position pour maintenir l'ordre décroissant
                             insertSortedDesc(toProcess, partRemaining);
@@ -614,7 +637,15 @@ public class VehiculeService {
                             remaining.put(bestForSplit, 0);
                             vehiclesUsedInInterval.add(bestForSplit);
                             assignedPairs.add(new AssignPair(bestForSplit, partToAssign));
-                            toProcess.remove(0);
+                            toProcess.remove(r);
+
+                            // Retirer l'ancien reste si c'en était un
+                            lastUnassignedParts.remove(r);
+
+                            // Tracker cette réservation comme splittée pour prioriser ses restes
+                            if (r.getIdReservation() != null) {
+                                splitClientIds.add(r.getIdReservation());
+                            }
 
                             // Insérer le reste à la bonne position pour maintenir l'ordre décroissant
                             insertSortedDesc(toProcess, partRemaining);
@@ -1439,11 +1470,45 @@ public class VehiculeService {
 
     /**
      * Trouve la réservation la plus proche des places restantes.
-     * Privilégie celles qui rentrent (passagers <= places restantes).
+     * Privilégie d'abord les restes des clients déjà partiellement assignés (splitClientIds).
+     * Ensuite, privilégie celles qui rentrent (passagers <= places restantes).
      * En cas d'égalité, prend la plus grande.
      */
-    private Reservation findClosestReservationToFill(List<Reservation> reservations, int remainingSpace) {
+    private Reservation findClosestReservationToFill(List<Reservation> reservations, int remainingSpace, Set<Integer> splitClientIds) {
         if (reservations == null || reservations.isEmpty() || remainingSpace <= 0) return null;
+
+        // Séparer les restes des clients déjà splittés des autres
+        List<Reservation> leftovers = new ArrayList<>();
+        List<Reservation> others = new ArrayList<>();
+
+        for (Reservation r : reservations) {
+            if (r == null) continue;
+            Integer id = r.getIdReservation();
+            if (id != null && splitClientIds != null && splitClientIds.contains(id)) {
+                leftovers.add(r);
+            } else {
+                others.add(r);
+            }
+        }
+
+        // Chercher d'abord parmi les restes (leftovers) des clients déjà partiellement assignés
+        Reservation bestLeftover = findBestReservationInList(leftovers, remainingSpace);
+        if (bestLeftover != null) {
+            return bestLeftover;
+        }
+
+        // Sinon, chercher parmi les autres réservations
+        return findBestReservationInList(others, remainingSpace);
+    }
+
+    /**
+     * Trouve la meilleure réservation dans une liste selon les critères:
+     * 1. Privilégie celles qui rentrent (passagers <= places restantes)
+     * 2. Parmi celles qui rentrent, prend celle la plus proche de l'espace restant
+     * 3. En cas d'égalité, prend la plus grande
+     */
+    private Reservation findBestReservationInList(List<Reservation> reservations, int remainingSpace) {
+        if (reservations == null || reservations.isEmpty()) return null;
 
         Reservation best = null;
         int bestDiff = Integer.MAX_VALUE;
@@ -1480,6 +1545,35 @@ public class VehiculeService {
         }
 
         return best;
+    }
+
+    /**
+     * Trouve la prochaine réservation à traiter.
+     * PRIORITÉ: d'abord les restes (leftovers) des clients déjà partiellement assignés.
+     * Parmi les leftovers, prend le plus grand.
+     * Si pas de leftover, retourne null (le code appelant prendra le premier de la liste).
+     */
+    private Reservation findNextReservationToProcess(List<Reservation> toProcess, Set<Integer> splitClientIds) {
+        if (toProcess == null || toProcess.isEmpty()) return null;
+        if (splitClientIds == null || splitClientIds.isEmpty()) return null;
+
+        // Chercher le plus grand leftover (réservation dont l'ID est dans splitClientIds)
+        Reservation largestLeftover = null;
+        int maxPass = 0;
+
+        for (Reservation r : toProcess) {
+            if (r == null) continue;
+            Integer id = r.getIdReservation();
+            if (id != null && splitClientIds.contains(id)) {
+                int pass = r.getNbPassager() != null ? r.getNbPassager() : 0;
+                if (pass > maxPass) {
+                    maxPass = pass;
+                    largestLeftover = r;
+                }
+            }
+        }
+
+        return largestLeftover;
     }
 
     /**
