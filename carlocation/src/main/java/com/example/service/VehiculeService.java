@@ -13,6 +13,7 @@ import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,12 +30,15 @@ import com.example.repository.DistanceRepository;
 import com.example.repository.ParametreRepository;
 
 public class VehiculeService {
-    
+
     private final VehiculeRepository vehiculeRepository;
 
     // Dernières heures de départ calculées (par véhicule) lors d'un `assignByIntervals`.
     // On y met l'heure de départ de l'intervalle (commune à tous les véhicules de l'intervalle).
     private final Map<Vehicule, Timestamp> lastDepartTimes = new HashMap<>();
+
+    // Parties de réservations non assignées (passagers restants après division)
+    private final List<Reservation> lastUnassignedParts = new ArrayList<>();
 
     public VehiculeService() {
         this.vehiculeRepository = new VehiculeRepository();
@@ -273,11 +277,176 @@ public class VehiculeService {
     }
 
     /**
+     * Retourne les véhicules qui seront disponibles AVANT la fin de l'intervalle.
+     * Inclut les véhicules qui reviennent PENDANT l'intervalle.
+     *
+     * @param intervalEnd Fin de l'intervalle
+     * @param dateForDisponibilite Date pour chercher dans la table disponibilite
+     * @return Map de véhicule -> heure de disponibilité effective
+     */
+    public Map<Vehicule, Timestamp> findVehiclesAvailableByEndOfInterval(Timestamp intervalEnd, Date dateForDisponibilite) throws SQLException {
+        Map<Vehicule, Timestamp> result = new HashMap<>();
+
+        // 1. Récupérer tous les véhicules
+        List<Vehicule> allVehicles = getAllVehicules();
+
+        // 2. Récupérer la dernière heure de retour pour chaque véhicule (trajets terminés)
+        String sqlLastReturn = """
+            SELECT id_vehicule, MAX(date_retour) as last_return
+            FROM assignation
+            GROUP BY id_vehicule
+        """;
+
+        Map<Long, Timestamp> lastReturns = new HashMap<>();
+        try (Connection conn = DbConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sqlLastReturn)) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    lastReturns.put(rs.getLong("id_vehicule"), rs.getTimestamp("last_return"));
+                }
+            }
+        }
+
+        // 3. Récupérer les contraintes de disponibilité de la table `disponibilite`
+        String sqlDisponibilite = """
+            SELECT id_vehicule, date_disponible, heure_disponible
+            FROM disponibilite
+            WHERE date_disponible = ?
+        """;
+
+        Map<Long, Timestamp> scheduledAvailability = new HashMap<>();
+        try (Connection conn = DbConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sqlDisponibilite)) {
+            stmt.setDate(1, dateForDisponibilite);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Date d = rs.getDate("date_disponible");
+                    Time t = rs.getTime("heure_disponible");
+                    if (d != null && t != null) {
+                        Timestamp ts = Timestamp.valueOf(d.toLocalDate().atTime(t.toLocalTime()));
+                        scheduledAvailability.put(rs.getLong("id_vehicule"), ts);
+                    }
+                }
+            }
+        }
+
+        // 4. Pour chaque véhicule, calculer son heure de disponibilité effective
+        for (Vehicule v : allVehicles) {
+            Timestamp lastReturn = lastReturns.get(v.getId());
+            Timestamp scheduled = scheduledAvailability.get(v.getId());
+
+            Timestamp effectiveAvailability = null;
+
+            if (lastReturn != null && scheduled != null) {
+                // Prendre le plus tardif
+                effectiveAvailability = lastReturn.after(scheduled) ? lastReturn : scheduled;
+            } else if (lastReturn != null) {
+                effectiveAvailability = lastReturn;
+            } else if (scheduled != null) {
+                effectiveAvailability = scheduled;
+            }
+
+            // Inclure le véhicule s'il sera disponible avant la fin de l'intervalle
+            if (effectiveAvailability == null || !effectiveAvailability.after(intervalEnd)) {
+                result.put(v, effectiveAvailability);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Retourne l'heure de disponibilité de chaque véhicule.
+     * L'heure de disponibilité = max(heure_retour_dernier_trajet, heure_table_disponibilite)
+     * Si le véhicule n'a pas de contrainte, il est disponible immédiatement (null).
+     */
+    public Map<Vehicule, Timestamp> findVehicleAvailability(List<Vehicule> vehicles, Timestamp beforeTime) throws SQLException {
+        Map<Vehicule, Timestamp> availability = new HashMap<>();
+        if (vehicles == null || vehicles.isEmpty()) return availability;
+
+        // 1. Récupérer l'heure de retour du dernier trajet pour chaque véhicule
+        String sqlLastReturn = """
+            SELECT id_vehicule, MAX(date_retour) as last_return
+            FROM assignation
+            WHERE date_retour <= ?
+            GROUP BY id_vehicule
+        """;
+
+        Map<Long, Timestamp> lastReturns = new HashMap<>();
+        try (Connection conn = DbConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sqlLastReturn)) {
+
+            stmt.setTimestamp(1, beforeTime);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    lastReturns.put(rs.getLong("id_vehicule"), rs.getTimestamp("last_return"));
+                }
+            }
+        }
+
+        // 2. Récupérer les contraintes de disponibilité de la table `disponibilite`
+        Date dateOnly = new Date(beforeTime.getTime());
+        String sqlDisponibilite = """
+            SELECT id_vehicule, date_disponible, heure_disponible
+            FROM disponibilite
+            WHERE date_disponible = ?
+        """;
+
+        Map<Long, Timestamp> scheduledAvailability = new HashMap<>();
+        try (Connection conn = DbConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sqlDisponibilite)) {
+
+            stmt.setDate(1, dateOnly);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Date d = rs.getDate("date_disponible");
+                    Time t = rs.getTime("heure_disponible");
+                    if (d != null && t != null) {
+                        Timestamp ts = Timestamp.valueOf(d.toLocalDate().atTime(t.toLocalTime()));
+                        scheduledAvailability.put(rs.getLong("id_vehicule"), ts);
+                    }
+                }
+            }
+        }
+
+        // 3. Pour chaque véhicule, l'heure de disponibilité = max(lastReturn, scheduledAvailability)
+        for (Vehicule v : vehicles) {
+            Timestamp lastReturn = lastReturns.get(v.getId());
+            Timestamp scheduled = scheduledAvailability.get(v.getId());
+
+            Timestamp effectiveAvailability = null;
+
+            if (lastReturn != null && scheduled != null) {
+                // Prendre le plus tardif
+                effectiveAvailability = lastReturn.after(scheduled) ? lastReturn : scheduled;
+            } else if (lastReturn != null) {
+                effectiveAvailability = lastReturn;
+            } else if (scheduled != null) {
+                effectiveAvailability = scheduled;
+            }
+
+            availability.put(v, effectiveAvailability); // null si pas de contrainte
+        }
+
+        return availability;
+    }
+
+    /**
      * Accès aux heures de départ calculées lors du dernier appel à `assignByIntervals`.
      * Valeur = heure de départ de l'intervalle auquel le véhicule a été affecté.
      */
     public Map<Vehicule, Timestamp> getLastDepartTimes() {
         return lastDepartTimes;
+    }
+
+    /**
+     * Accès aux parties de réservations non assignées (passagers restants après division).
+     * Ces réservations ont un nombre de passagers réduit par rapport à l'original.
+     */
+    public List<Reservation> getLastUnassignedParts() {
+        return lastUnassignedParts;
     }
 
     /**
@@ -315,6 +484,7 @@ public class VehiculeService {
 
         // reset du dernier calcul
         lastDepartTimes.clear();
+        lastUnassignedParts.clear();
 
         if (taMinutes <= 0) taMinutes = 30;
 
@@ -334,13 +504,6 @@ public class VehiculeService {
         // qu'à partir de la fin de cet intervalle.
         Map<Integer, Timestamp> nextEligibleByReservation = new HashMap<>();
 
-        int maxVehicleCapacity = 0;
-        for (Vehicule v : getAllVehicules()) {
-            if (v != null && v.getNbPlace() > maxVehicleCapacity) {
-                maxVehicleCapacity = v.getNbPlace();
-            }
-        }
-
         while (!unassigned.isEmpty()) {
             Timestamp start = findNextIntervalStart(unassigned, nextEligibleByReservation);
             if (start == null) break;
@@ -349,8 +512,11 @@ public class VehiculeService {
             List<Reservation> batch = collectBatch(unassigned, end, nextEligibleByReservation);
             if (batch.isEmpty()) continue;
 
-            List<Vehicule> vehicles = findAvailableVehiculesBetween(start, end);
-            if (vehicles.isEmpty()) {
+            // Récupérer les véhicules disponibles AVANT la fin de l'intervalle (y compris ceux qui reviennent pendant)
+            Date dateForDisponibilite = new Date(start.getTime());
+            Map<Vehicule, Timestamp> vehicleAvailabilityMap = findVehiclesAvailableByEndOfInterval(end, dateForDisponibilite);
+
+            if (vehicleAvailabilityMap.isEmpty()) {
                 // Aucun véhicule disponible: on reporte tout le batch au prochain intervalle.
                 for (Reservation r : batch) {
                     if (r == null || r.getIdReservation() == null) continue;
@@ -359,64 +525,149 @@ public class VehiculeService {
                 continue;
             }
 
-            batch = sortReservationsByPassengersDesc(batch);
-            vehicles = sortVehiclesByCapacityDesc(vehicles);
+            List<Vehicule> vehicles = new ArrayList<>(vehicleAvailabilityMap.keySet());
             Map<Vehicule, Integer> remaining = initRemaining(vehicles);
 
             // Pour appliquer une heure de départ commune à tout l'intervalle
-            // ON NE PREND EN COMPTE QUE LES RÉSERVATIONS EFFECTIVEMENT ASSIGNÉES
             Set<Vehicule> vehiclesUsedInInterval = new HashSet<>();
             List<AssignPair> assignedPairs = new ArrayList<>();
 
-            for (int i = 0; i < batch.size(); i++) {
-                Reservation r = batch.get(i);
+            // Set pour tracker les réservations qui ont été splittées DANS CET INTERVALLE
+            // (pour prioriser leurs restes lors du remplissage)
+            // NE PAS initialiser avec les leftovers des intervalles précédents
+            // car on veut d'abord traiter les grandes réservations dans l'ordre décroissant
+            Set<Integer> splitClientIds = new HashSet<>();
+
+            // Liste des réservations à traiter dans ce batch (copie pour modification)
+            // Trier UNE SEULE FOIS au début par ordre décroissant de passagers
+            List<Reservation> toProcess = new ArrayList<>(batch);
+            toProcess.sort((a, b) -> {
+                int na = a.getNbPassager() != null ? a.getNbPassager() : 0;
+                int nb = b.getNbPassager() != null ? b.getNbPassager() : 0;
+                return Integer.compare(nb, na);
+            });
+
+            // BOUCLE PRINCIPALE : traiter les réservations une par une
+            while (!toProcess.isEmpty()) {
+                boolean progress = false;
+
+                // Prendre la prochaine réservation à traiter
+                // PRIORITÉ: d'abord les restes (leftovers) des clients déjà partiellement assignés
+                Reservation r = findNextReservationToProcess(toProcess, splitClientIds);
+                if (r == null) {
+                    r = toProcess.get(0);
+                }
                 int need = r.getNbPassager() != null ? r.getNbPassager() : 0;
-                if (need <= 0) continue;
+                if (need <= 0) {
+                    toProcess.remove(r);
+                    continue;
+                }
 
-                Vehicule chosen = chooseVehicleForReservation(vehicles, remaining, need);
-                
+                // 1. Chercher un véhicule qui peut contenir cette réservation
+                Vehicule chosen = findBestVehicleForReservation(vehicles, remaining, need);
+
                 if (chosen != null) {
-                    // ASSIGNATION NORMALE (le véhicule a assez de place)
+                    // Assigner la réservation au véhicule
                     result.computeIfAbsent(chosen, k -> new ArrayList<>()).add(r);
-                    remaining.put(chosen, remaining.getOrDefault(chosen, 0) - need);
-
+                    remaining.put(chosen, remaining.get(chosen) - need);
                     vehiclesUsedInInterval.add(chosen);
                     assignedPairs.add(new AssignPair(chosen, r));
-                } else {
-                   
-                    // Si aucun véhicule ne peut prendre tout le monde, on cherche celui qui a le plus de places restantes
-                    Vehicule maxCapVehicle = null;
-                    int maxCap = 0;
-                    for (Vehicule v : vehicles) {
-                        int remCap = remaining.getOrDefault(v, 0);
-                        if (remCap > maxCap) {
-                            maxCap = remCap;
-                            maxCapVehicle = v;
+                    toProcess.remove(r);
+
+                    // Retirer de lastUnassignedParts si c'était un reste
+                    lastUnassignedParts.remove(r);
+
+                    progress = true;
+
+                    // 2. REMPLISSAGE : chercher les réservations les plus proches des places restantes
+                    int remainingSpace = remaining.get(chosen);
+                    while (remainingSpace > 0 && !toProcess.isEmpty()) {
+                        Reservation closest = findClosestReservationToFill(toProcess, remainingSpace, splitClientIds);
+                        if (closest == null) break;
+
+                        int closestPass = closest.getNbPassager() != null ? closest.getNbPassager() : 0;
+                        if (closestPass <= 0) {
+                            toProcess.remove(closest);
+                            continue;
+                        }
+
+                        if (closestPass <= remainingSpace) {
+                            // La réservation rentre entièrement
+                            result.get(chosen).add(closest);
+                            remaining.put(chosen, remainingSpace - closestPass);
+                            remainingSpace = remaining.get(chosen);
+                            assignedPairs.add(new AssignPair(chosen, closest));
+                            toProcess.remove(closest);
+
+                            // Retirer de lastUnassignedParts si c'était un reste
+                            lastUnassignedParts.remove(closest);
+                        } else {
+                            // SPLIT pendant le remplissage : la réservation ne rentre pas entièrement
+                            Reservation partToAssign = cloneReservation(closest, remainingSpace);
+                            Reservation partRemaining = cloneReservation(closest, closestPass - remainingSpace);
+
+                            result.get(chosen).add(partToAssign);
+                            assignedPairs.add(new AssignPair(chosen, partToAssign));
+                            remaining.put(chosen, 0);
+                            remainingSpace = 0;
+                            toProcess.remove(closest);
+
+                            // Retirer l'ancien reste et ajouter le nouveau
+                            lastUnassignedParts.remove(closest);
+
+                            // NE PAS ajouter à splitClientIds pour un split pendant le remplissage
+                            // car ce leftover doit être traité pendant le FILL d'un autre véhicule,
+                            // pas priorisé dans la sélection principale
+
+                            // Insérer le reste à la bonne position pour maintenir l'ordre décroissant
+                            insertSortedDesc(toProcess, partRemaining);
+                            lastUnassignedParts.add(partRemaining);
                         }
                     }
+                } else {
+                    // Aucun véhicule ne peut contenir cette réservation -> SPLIT
+                    Vehicule bestForSplit = findVehicleWithMostSpace(vehicles, remaining);
+                    if (bestForSplit != null) {
+                        int availableSpace = remaining.get(bestForSplit);
+                        if (availableSpace > 0) {
+                            // Diviser la réservation
+                            Reservation partToAssign = cloneReservation(r, availableSpace);
+                            Reservation partRemaining = cloneReservation(r, need - availableSpace);
 
-                    if (maxCapVehicle != null && maxCap > 0) {
-                        // Création de 2 sous-réservations
-                        Reservation partToAssign = cloneReservation(r, maxCap);
-                        Reservation partRemaining = cloneReservation(r, need - maxCap);
+                            result.computeIfAbsent(bestForSplit, k -> new ArrayList<>()).add(partToAssign);
+                            remaining.put(bestForSplit, 0);
+                            vehiclesUsedInInterval.add(bestForSplit);
+                            assignedPairs.add(new AssignPair(bestForSplit, partToAssign));
+                            toProcess.remove(r);
 
-                        // On assigne la partie qui encaisse la capacité maximale du véhicule
-                        result.computeIfAbsent(maxCapVehicle, k -> new ArrayList<>()).add(partToAssign);
-                        remaining.put(maxCapVehicle, 0); // Le véhicule est plein
-                        vehiclesUsedInInterval.add(maxCapVehicle);
-                        assignedPairs.add(new AssignPair(maxCapVehicle, partToAssign));
+                            // Retirer l'ancien reste si c'en était un
+                            lastUnassignedParts.remove(r);
 
-                        // On réinsère le RESTE des passagers dans la liste à traiter juste après
-                        batch.add(i + 1, partRemaining);
+                            // Tracker cette réservation comme splittée pour prioriser ses restes
+                            if (r.getIdReservation() != null) {
+                                splitClientIds.add(r.getIdReservation());
+                            }
 
-                        // Important: on "fake" l'assignation de la réservation d'origine 
-                        // pour qu'elle soit considérée comme traitée et ne soit pas reportée indéfiniment.
-                        assignedPairs.add(new AssignPair(null, r));
+                            // Insérer le reste à la bonne position pour maintenir l'ordre décroissant
+                            insertSortedDesc(toProcess, partRemaining);
+                            lastUnassignedParts.add(partRemaining);
+
+                            progress = true;
+                        } else {
+                            // Aucune place disponible
+                            break;
+                        }
+                    } else {
+                        // Aucun véhicule avec des places
+                        break;
                     }
                 }
+
+                if (!progress) break;
             }
 
-            // Calculer l'heure de départ de l'intervalle uniquement à partir des réservations assignées
+            // Calculer l'heure de départ COMMUNE à tous les véhicules de l'intervalle
+            // = max(heure du dernier vol, max des heures de disponibilité des véhicules assignés)
             Timestamp intervalDepart = null;
             if (!assignedPairs.isEmpty()) {
                 List<Reservation> assignedRes = new ArrayList<>();
@@ -424,16 +675,25 @@ public class VehiculeService {
                 intervalDepart = getDepartTimeFromAssignedReservations(assignedRes);
             }
 
-            // appliquer la même heure de départ à tous les véhicules affectés dans l'intervalle
-            if (intervalDepart != null && !vehiclesUsedInInterval.isEmpty()) {
-                for (Vehicule v : vehiclesUsedInInterval) {
-                    // si le véhicule est utilisé plusieurs fois dans la journée, on garde son 1er départ
-                    Timestamp existing = lastDepartTimes.get(v);
-                    if (existing == null || intervalDepart.before(existing)) {
-                        lastDepartTimes.put(v, intervalDepart);
+            // Calculer le max des heures de disponibilité des véhicules assignés
+            Timestamp maxVehicleAvailability = null;
+            for (Vehicule v : vehiclesUsedInInterval) {
+                Timestamp availability = vehicleAvailabilityMap.get(v);
+                if (availability != null) {
+                    if (maxVehicleAvailability == null || availability.after(maxVehicleAvailability)) {
+                        maxVehicleAvailability = availability;
                     }
                 }
+            }
 
+            // L'heure de départ commune = max(heure du dernier vol, max des heures de disponibilité)
+            Timestamp commonDepartTime = intervalDepart;
+            if (maxVehicleAvailability != null && (commonDepartTime == null || maxVehicleAvailability.after(commonDepartTime))) {
+                commonDepartTime = maxVehicleAvailability;
+            }
+
+            // Persister les assignations avec l'heure de départ COMMUNE
+            if (commonDepartTime != null && !vehiclesUsedInInterval.isEmpty()) {
                 // Regrouper les réservations par véhicule pour calculer l'heure de retour commune
                 Map<Vehicule, List<Reservation>> vehicleReservations = new HashMap<>();
                 for (AssignPair pair : assignedPairs) {
@@ -442,43 +702,57 @@ public class VehiculeService {
                     }
                 }
 
-                // Persister les assignations avec l'heure de retour calculée à partir du départ commun
+                // Persister les assignations avec l'heure de départ et retour calculées pour chaque véhicule
                 for (Map.Entry<Vehicule, List<Reservation>> entry : vehicleReservations.entrySet()) {
                     Vehicule v = entry.getKey();
                     List<Reservation> vReservations = entry.getValue();
 
-                    // Calculer l'heure de retour commune pour ce véhicule
+                    // Stocker l'heure de départ commune pour l'affichage
+                    Timestamp existing = lastDepartTimes.get(v);
+                    if (existing == null || commonDepartTime.before(existing)) {
+                        lastDepartTimes.put(v, commonDepartTime);
+                    }
+
+                    // Calculer l'heure de retour commune pour ce véhicule à partir du départ commun
                     Timestamp vehicleRetour = null;
                     try {
-                        vehicleRetour = Reservation.calculHeureRetourFromDepart(intervalDepart, vReservations);
+                        vehicleRetour = Reservation.calculHeureRetourFromDepart(commonDepartTime, vReservations);
                     } catch (SQLException ignore) {
                     }
 
-                    // Persister chaque assignation avec la même heure de retour
+                    // Persister chaque assignation avec l'heure de départ commune et retour du véhicule
                     for (Reservation r : vReservations) {
-                        persistAssignationWithRetour(v, r, intervalDepart, vehicleRetour);
+                        persistAssignationWithRetour(v, r, commonDepartTime, vehicleRetour);
                     }
                 }
             }
 
-            // Retirer uniquement les réservations qui ont été assignées.
-            // Les réservations non-assignées sont renvoyées en fin de liste
-            // pour être reconsidérées au prochain intervalle (cycle continu).
-            Set<Integer> assignedIds = new HashSet<>();
-            for (AssignPair p : assignedPairs) {
-                if (p.reservation != null && p.reservation.getIdReservation() != null) {
-                    assignedIds.add(p.reservation.getIdReservation());
-                }
-            }
-
+            // Retirer les réservations originales assignées de unassigned
+            // Les réservations qui ne sont plus dans toProcess ont été assignées
+            Set<Reservation> stillToProcess = new HashSet<>(toProcess);
             for (Reservation r : batch) {
                 if (r == null) continue;
-                Integer id = r.getIdReservation();
-                if (id != null && assignedIds.contains(id)) {
+                // Si la réservation n'est plus dans toProcess, elle a été assignée
+                if (!stillToProcess.contains(r)) {
                     unassigned.remove(r);
                 } else {
                     // Réservation non assignée : reporter au prochain intervalle
-                    // Elle sera reconsidérée avec les nouvelles réservations de cet intervalle
+                    Integer id = r.getIdReservation();
+                    if (id != null) {
+                        nextEligibleByReservation.put(id, end);
+                    }
+                }
+            }
+
+            // Ajouter les parties restantes non assignées (clones avec passagers restants)
+            // à unassigned pour qu'elles soient traitées au prochain intervalle
+            for (Reservation r : toProcess) {
+                if (r == null) continue;
+                int passengers = r.getNbPassager() != null ? r.getNbPassager() : 0;
+                if (passengers > 0) {
+                    // C'est une partie restante non assignée
+                    unassigned.add(r);
+                    Integer id = r.getIdReservation();
                     if (id != null) {
                         nextEligibleByReservation.put(id, end);
                     }
@@ -585,6 +859,102 @@ public class VehiculeService {
         return batch;
     }
 
+    /**
+     * Trouve la réservation la plus proche parmi les candidates, en fonction de la distance
+     * par rapport aux hôtels déjà présents dans le trajet du véhicule.
+     *
+     * @param vehicleHotels Liste des hôtels déjà dans le trajet du véhicule
+     * @param candidates Réservations candidates (non encore assignées)
+     * @param assignedInBatch Set des IDs de réservations déjà assignées dans ce batch
+     * @return La réservation la plus proche, ou null si aucune candidate
+     */
+    private Reservation findClosestReservation(List<Integer> vehicleHotels, List<Reservation> candidates, Set<Integer> assignedInBatch) {
+        if (candidates == null || candidates.isEmpty()) return null;
+
+        DistanceRepository distanceRepo = new DistanceRepository();
+        Reservation closest = null;
+        BigDecimal minDistance = null;
+
+        // Trouver l'aéroport
+        Integer aeroportId = null;
+        try {
+            for (Hotel h : Hotel.findAll()) {
+                if (Boolean.TRUE.equals(h.getAeroport())) {
+                    aeroportId = h.getIdHotel();
+                    break;
+                }
+            }
+        } catch (SQLException e) {
+            return null;
+        }
+
+        // Si le véhicule n'a pas encore d'hôtel, utiliser l'aéroport comme point de référence
+        List<Integer> referenceHotels = new ArrayList<>();
+        if (vehicleHotels == null || vehicleHotels.isEmpty()) {
+            if (aeroportId != null) {
+                referenceHotels.add(aeroportId);
+            }
+        } else {
+            referenceHotels.addAll(vehicleHotels);
+        }
+
+        for (Reservation r : candidates) {
+            if (r == null) continue;
+            Integer id = r.getIdReservation();
+            // Ignorer les réservations déjà assignées dans ce batch
+            if (id != null && assignedInBatch.contains(id)) continue;
+
+            Hotel hotel = r.getHotel();
+            if (hotel == null) continue;
+
+            int hotelId = hotel.getIdHotel();
+
+            // Calculer la distance minimale de cet hôtel par rapport aux hôtels de référence
+            BigDecimal distanceToRoute = null;
+            for (Integer refHotelId : referenceHotels) {
+                try {
+                    BigDecimal d = getDistanceKm(distanceRepo, refHotelId, hotelId);
+                    if (d != null) {
+                        if (distanceToRoute == null || d.compareTo(distanceToRoute) < 0) {
+                            distanceToRoute = d;
+                        }
+                    }
+                } catch (SQLException e) {
+                    // Ignorer
+                }
+            }
+
+            if (distanceToRoute != null) {
+                if (minDistance == null || distanceToRoute.compareTo(minDistance) < 0) {
+                    minDistance = distanceToRoute;
+                    closest = r;
+                }
+            }
+        }
+
+        return closest;
+    }
+
+    /**
+     * Récupère les IDs des hôtels des réservations assignées à un véhicule.
+     */
+    private List<Integer> getVehicleHotelIds(List<Reservation> vehicleReservations) {
+        List<Integer> hotelIds = new ArrayList<>();
+        if (vehicleReservations == null) return hotelIds;
+
+        Set<Integer> seen = new HashSet<>();
+        for (Reservation r : vehicleReservations) {
+            if (r != null && r.getHotel() != null) {
+                int hid = r.getHotel().getIdHotel();
+                if (!seen.contains(hid)) {
+                    seen.add(hid);
+                    hotelIds.add(hid);
+                }
+            }
+        }
+        return hotelIds;
+    }
+
     private List<Reservation> sortReservationsByPassengersDesc(List<Reservation> batch) {
         batch.sort((a, b) -> {
             int na = a.getNbPassager() != null ? a.getNbPassager() : 0;
@@ -603,6 +973,28 @@ public class VehiculeService {
         Map<Vehicule, Integer> remaining = new HashMap<>();
         for (Vehicule v : vehicles) remaining.put(v, v.getNbPlace());
         return remaining;
+    }
+
+    /**
+     * Insère une réservation dans une liste triée par ordre décroissant de passagers.
+     * Maintient l'ordre décroissant après l'insertion.
+     */
+    private void insertSortedDesc(List<Reservation> list, Reservation r) {
+        if (r == null) return;
+        int passengers = r.getNbPassager() != null ? r.getNbPassager() : 0;
+
+        // Trouver la position d'insertion pour maintenir l'ordre décroissant
+        int insertPos = 0;
+        for (int i = 0; i < list.size(); i++) {
+            Reservation current = list.get(i);
+            int currentPass = current.getNbPassager() != null ? current.getNbPassager() : 0;
+            if (passengers > currentPass) {
+                insertPos = i;
+                break;
+            }
+            insertPos = i + 1;
+        }
+        list.add(insertPos, r);
     }
 
     private Vehicule chooseVehicleForReservation(List<Vehicule> vehicles, Map<Vehicule, Integer> remaining, int need) {
@@ -1044,6 +1436,171 @@ public class VehiculeService {
             // En cas de problème, fallback
             return chooseFromCandidates(candidates);
         }
+    }
+
+    /**
+     * Trouve le meilleur véhicule pour une réservation donnée.
+     * Cherche le véhicule qui peut contenir la réservation avec le moins de gaspillage.
+     */
+    private Vehicule findBestVehicleForReservation(List<Vehicule> vehicles, Map<Vehicule, Integer> remaining, int need) {
+        if (vehicles == null || vehicles.isEmpty()) return null;
+
+        // Chercher les véhicules qui peuvent contenir la réservation
+        List<Vehicule> candidates = new ArrayList<>();
+        int minWaste = Integer.MAX_VALUE;
+
+        for (Vehicule v : vehicles) {
+            int space = remaining.getOrDefault(v, 0);
+            if (space >= need) {
+                int waste = space - need;
+                if (waste < minWaste) {
+                    minWaste = waste;
+                    candidates.clear();
+                    candidates.add(v);
+                } else if (waste == minWaste) {
+                    candidates.add(v);
+                }
+            }
+        }
+
+        if (candidates.isEmpty()) return null;
+        if (candidates.size() == 1) return candidates.get(0);
+
+        return chooseByTrajetsThenCarburant(candidates);
+    }
+
+    /**
+     * Trouve la réservation la plus proche des places restantes.
+     * Privilégie d'abord les restes des clients déjà partiellement assignés (splitClientIds).
+     * Ensuite, privilégie celles qui rentrent (passagers <= places restantes).
+     * En cas d'égalité, prend la plus grande.
+     */
+    private Reservation findClosestReservationToFill(List<Reservation> reservations, int remainingSpace, Set<Integer> splitClientIds) {
+        if (reservations == null || reservations.isEmpty() || remainingSpace <= 0) return null;
+
+        // Séparer les restes des clients déjà splittés des autres
+        List<Reservation> leftovers = new ArrayList<>();
+        List<Reservation> others = new ArrayList<>();
+
+        for (Reservation r : reservations) {
+            if (r == null) continue;
+            Integer id = r.getIdReservation();
+            if (id != null && splitClientIds != null && splitClientIds.contains(id)) {
+                leftovers.add(r);
+            } else {
+                others.add(r);
+            }
+        }
+
+        // Chercher d'abord parmi les restes (leftovers) des clients déjà partiellement assignés
+        Reservation bestLeftover = findBestReservationInList(leftovers, remainingSpace);
+        if (bestLeftover != null) {
+            return bestLeftover;
+        }
+
+        // Sinon, chercher parmi les autres réservations
+        return findBestReservationInList(others, remainingSpace);
+    }
+
+    /**
+     * Trouve la meilleure réservation dans une liste selon les critères:
+     * 1. Privilégie celles qui rentrent (passagers <= places restantes)
+     * 2. Parmi celles qui rentrent, prend celle la plus proche de l'espace restant
+     * 3. En cas d'égalité, prend la plus grande
+     */
+    private Reservation findBestReservationInList(List<Reservation> reservations, int remainingSpace) {
+        if (reservations == null || reservations.isEmpty()) return null;
+
+        Reservation best = null;
+        int bestDiff = Integer.MAX_VALUE;
+        boolean bestFits = false;
+
+        for (Reservation r : reservations) {
+            if (r == null) continue;
+            int passengers = r.getNbPassager() != null ? r.getNbPassager() : 0;
+            if (passengers <= 0) continue;
+
+            boolean fits = passengers <= remainingSpace;
+            int diff = Math.abs(passengers - remainingSpace);
+
+            // Priorité : ceux qui rentrent d'abord
+            if (fits && !bestFits) {
+                // r rentre mais pas best -> r est meilleur
+                best = r;
+                bestDiff = diff;
+                bestFits = true;
+            } else if (fits == bestFits) {
+                // Même catégorie (tous deux rentrent ou non)
+                if (diff < bestDiff) {
+                    best = r;
+                    bestDiff = diff;
+                } else if (diff == bestDiff && best != null) {
+                    // Égalité de différence, prendre le plus grand
+                    int bestPass = best.getNbPassager() != null ? best.getNbPassager() : 0;
+                    if (passengers > bestPass) {
+                        best = r;
+                    }
+                }
+            }
+            // Si r ne rentre pas mais best rentre -> on garde best
+        }
+
+        return best;
+    }
+
+    /**
+     * Trouve la prochaine réservation à traiter.
+     * PRIORITÉ: d'abord les restes (leftovers) des clients déjà partiellement assignés.
+     * Parmi les leftovers, prend le plus grand.
+     * Si pas de leftover, retourne null (le code appelant prendra le premier de la liste).
+     */
+    private Reservation findNextReservationToProcess(List<Reservation> toProcess, Set<Integer> splitClientIds) {
+        if (toProcess == null || toProcess.isEmpty()) return null;
+        if (splitClientIds == null || splitClientIds.isEmpty()) return null;
+
+        // Chercher le plus grand leftover (réservation dont l'ID est dans splitClientIds)
+        Reservation largestLeftover = null;
+        int maxPass = 0;
+
+        for (Reservation r : toProcess) {
+            if (r == null) continue;
+            Integer id = r.getIdReservation();
+            if (id != null && splitClientIds.contains(id)) {
+                int pass = r.getNbPassager() != null ? r.getNbPassager() : 0;
+                if (pass > maxPass) {
+                    maxPass = pass;
+                    largestLeftover = r;
+                }
+            }
+        }
+
+        return largestLeftover;
+    }
+
+    /**
+     * Trouve le véhicule avec le plus d'espace disponible (pour les splits).
+     */
+    private Vehicule findVehicleWithMostSpace(List<Vehicule> vehicles, Map<Vehicule, Integer> remaining) {
+        if (vehicles == null || vehicles.isEmpty()) return null;
+
+        int maxSpace = 0;
+        List<Vehicule> candidates = new ArrayList<>();
+
+        for (Vehicule v : vehicles) {
+            int space = remaining.getOrDefault(v, 0);
+            if (space > maxSpace) {
+                maxSpace = space;
+                candidates.clear();
+                candidates.add(v);
+            } else if (space == maxSpace && space > 0) {
+                candidates.add(v);
+            }
+        }
+
+        if (candidates.isEmpty()) return null;
+        if (candidates.size() == 1) return candidates.get(0);
+
+        return chooseByTrajetsThenCarburant(candidates);
     }
 
     public Timestamp getHeureRetour(Long vehiculeId) throws SQLException {

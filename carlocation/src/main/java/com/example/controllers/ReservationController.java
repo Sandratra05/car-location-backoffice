@@ -119,9 +119,8 @@ public class ReservationController {
                 returnTimes.put(v, ret);
             }
 
-            // Récupérer les réservations non assignées
-            List<Reservation> allReservations = Reservation.findReservationsByDateASC(ts);
-            List<Reservation> unassigned = vs.findUnassignedReservations(allReservations, assignments);
+            // Récupérer les parties de réservations non assignées (passagers restants après division)
+            List<Reservation> unassignedParts = vs.getLastUnassignedParts();
 
             mv.setView("planning-result.jsp");
             mv.addAttribute("assignments", assignments);
@@ -134,7 +133,7 @@ public class ReservationController {
             mv.addAttribute("placesMap", placesMap);
             mv.addAttribute("occupiedMap", occupiedMap);
             mv.addAttribute("tempsAttenteMin", tempsAttenteMin);
-            mv.addAttribute("unassigned", unassigned);
+            mv.addAttribute("unassigned", unassignedParts);
         } catch (Exception e) {
             mv.setView("planning-form.jsp");
             mv.addAttribute("error", "Erreur lors de la génération du planning: " + e.getMessage());
