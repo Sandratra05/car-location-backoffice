@@ -545,7 +545,7 @@ public class VehiculeService {
             while (!toProcess.isEmpty()) {
                 boolean progress = false;
 
-                // Prendre la première réservation (prioritaire - soit la plus grande, soit un reste de split)
+                // Prendre la première réservation (la plus grande)
                 Reservation r = toProcess.get(0);
                 int need = r.getNbPassager() != null ? r.getNbPassager() : 0;
                 if (need <= 0) {
@@ -553,22 +553,56 @@ public class VehiculeService {
                     continue;
                 }
 
-                // Trouver le véhicule optimal selon : nombre de places, nombre de trajets, carburant
-                Vehicule chosen = chooseOptimalVehicle(vehicles, remaining, need);
+                // 1. Chercher un véhicule qui peut contenir cette réservation
+                Vehicule chosen = findBestVehicleForReservation(vehicles, remaining, need);
 
                 if (chosen != null) {
                     // Assigner la réservation au véhicule
                     result.computeIfAbsent(chosen, k -> new ArrayList<>()).add(r);
-                    remaining.put(chosen, remaining.getOrDefault(chosen, 0) - need);
+                    remaining.put(chosen, remaining.get(chosen) - need);
                     vehiclesUsedInInterval.add(chosen);
                     assignedPairs.add(new AssignPair(chosen, r));
                     toProcess.remove(0);
                     progress = true;
+
+                    // 2. REMPLISSAGE : chercher les réservations les plus proches des places restantes
+                    int remainingSpace = remaining.get(chosen);
+                    while (remainingSpace > 0 && !toProcess.isEmpty()) {
+                        Reservation closest = findClosestReservationToFill(toProcess, remainingSpace);
+                        if (closest == null) break;
+
+                        int closestPass = closest.getNbPassager() != null ? closest.getNbPassager() : 0;
+                        if (closestPass <= 0) {
+                            toProcess.remove(closest);
+                            continue;
+                        }
+
+                        if (closestPass <= remainingSpace) {
+                            // La réservation rentre entièrement
+                            result.get(chosen).add(closest);
+                            remaining.put(chosen, remainingSpace - closestPass);
+                            remainingSpace = remaining.get(chosen);
+                            assignedPairs.add(new AssignPair(chosen, closest));
+                            toProcess.remove(closest);
+                        } else {
+                            // SPLIT pendant le remplissage : la réservation ne rentre pas entièrement
+                            Reservation partToAssign = cloneReservation(closest, remainingSpace);
+                            Reservation partRemaining = cloneReservation(closest, closestPass - remainingSpace);
+
+                            result.get(chosen).add(partToAssign);
+                            assignedPairs.add(new AssignPair(chosen, partToAssign));
+                            remaining.put(chosen, 0);
+                            remainingSpace = 0;
+                            toProcess.remove(closest);
+
+                            // Ajouter le reste au début de toProcess pour traitement immédiat
+                            toProcess.add(0, partRemaining);
+                            lastUnassignedParts.add(partRemaining);
+                        }
+                    }
                 } else {
-                    // La réservation ne rentre pas entièrement -> SPLIT
-                    // Mettre une partie dans le véhicule avec le plus d'espace
-                    // Le reste est PRIORITAIRE et doit être traité immédiatement
-                    Vehicule bestForSplit = findBestVehicleForSplit(vehicles, remaining);
+                    // Aucun véhicule ne peut contenir cette réservation -> SPLIT
+                    Vehicule bestForSplit = findVehicleWithMostSpace(vehicles, remaining);
                     if (bestForSplit != null) {
                         int availableSpace = remaining.get(bestForSplit);
                         if (availableSpace > 0) {
@@ -582,22 +616,21 @@ public class VehiculeService {
                             assignedPairs.add(new AssignPair(bestForSplit, partToAssign));
                             toProcess.remove(0);
 
-                            // Ajouter le reste AU DÉBUT de toProcess (priorité) pour qu'il soit traité immédiatement
+                            // Ajouter le reste AU DÉBUT de toProcess pour qu'il soit traité immédiatement
                             toProcess.add(0, partRemaining);
                             lastUnassignedParts.add(partRemaining);
 
                             progress = true;
                         } else {
-                            // Aucune place disponible, retirer et reporter
-                            toProcess.remove(0);
+                            // Aucune place disponible
+                            break;
                         }
                     } else {
-                        // Aucun véhicule avec des places, sortir de la boucle
+                        // Aucun véhicule avec des places
                         break;
                     }
                 }
 
-                // Si aucune progression, sortir de la boucle
                 if (!progress) break;
             }
 
@@ -1352,26 +1385,25 @@ public class VehiculeService {
     }
 
     /**
-     * Choisit le véhicule optimal selon les critères de priorité :
-     * 1. Nombre de places (minimiser le gaspillage - choisir le plus petit qui peut contenir)
-     * 2. Nombre de trajets (minimiser)
-     * 3. Type de carburant (privilégier le diesel)
+     * Trouve le meilleur véhicule pour une réservation donnée.
+     * Cherche le véhicule qui peut contenir la réservation avec le moins de gaspillage.
      */
-    private Vehicule chooseOptimalVehicle(List<Vehicule> vehicles, Map<Vehicule, Integer> remaining, int need) {
+    private Vehicule findBestVehicleForReservation(List<Vehicule> vehicles, Map<Vehicule, Integer> remaining, int need) {
         if (vehicles == null || vehicles.isEmpty()) return null;
 
-        // 1. Filtrer les véhicules qui peuvent contenir la réservation
+        // Chercher les véhicules qui peuvent contenir la réservation
         List<Vehicule> candidates = new ArrayList<>();
-        int bestCapacity = Integer.MAX_VALUE;
+        int minWaste = Integer.MAX_VALUE;
 
         for (Vehicule v : vehicles) {
-            int availableSpace = remaining.getOrDefault(v, 0);
-            if (availableSpace >= need) {
-                if (availableSpace < bestCapacity) {
-                    bestCapacity = availableSpace;
+            int space = remaining.getOrDefault(v, 0);
+            if (space >= need) {
+                int waste = space - need;
+                if (waste < minWaste) {
+                    minWaste = waste;
                     candidates.clear();
                     candidates.add(v);
-                } else if (availableSpace == bestCapacity) {
+                } else if (waste == minWaste) {
                     candidates.add(v);
                 }
             }
@@ -1380,28 +1412,70 @@ public class VehiculeService {
         if (candidates.isEmpty()) return null;
         if (candidates.size() == 1) return candidates.get(0);
 
-        // 2. Parmi les candidats, choisir par nombre de trajets puis carburant
         return chooseByTrajetsThenCarburant(candidates);
     }
 
     /**
-     * Trouve le meilleur véhicule pour un split (quand une réservation ne rentre nulle part entièrement).
-     * Retourne le véhicule avec le plus d'espace disponible.
-     * En cas d'égalité, applique les critères : nombre de trajets, carburant.
+     * Trouve la réservation la plus proche des places restantes.
+     * Privilégie celles qui rentrent (passagers <= places restantes).
+     * En cas d'égalité, prend la plus grande.
      */
-    private Vehicule findBestVehicleForSplit(List<Vehicule> vehicles, Map<Vehicule, Integer> remaining) {
+    private Reservation findClosestReservationToFill(List<Reservation> reservations, int remainingSpace) {
+        if (reservations == null || reservations.isEmpty() || remainingSpace <= 0) return null;
+
+        Reservation best = null;
+        int bestDiff = Integer.MAX_VALUE;
+        boolean bestFits = false;
+
+        for (Reservation r : reservations) {
+            if (r == null) continue;
+            int passengers = r.getNbPassager() != null ? r.getNbPassager() : 0;
+            if (passengers <= 0) continue;
+
+            boolean fits = passengers <= remainingSpace;
+            int diff = Math.abs(passengers - remainingSpace);
+
+            // Priorité : ceux qui rentrent d'abord
+            if (fits && !bestFits) {
+                // r rentre mais pas best -> r est meilleur
+                best = r;
+                bestDiff = diff;
+                bestFits = true;
+            } else if (fits == bestFits) {
+                // Même catégorie (tous deux rentrent ou non)
+                if (diff < bestDiff) {
+                    best = r;
+                    bestDiff = diff;
+                } else if (diff == bestDiff && best != null) {
+                    // Égalité de différence, prendre le plus grand
+                    int bestPass = best.getNbPassager() != null ? best.getNbPassager() : 0;
+                    if (passengers > bestPass) {
+                        best = r;
+                    }
+                }
+            }
+            // Si r ne rentre pas mais best rentre -> on garde best
+        }
+
+        return best;
+    }
+
+    /**
+     * Trouve le véhicule avec le plus d'espace disponible (pour les splits).
+     */
+    private Vehicule findVehicleWithMostSpace(List<Vehicule> vehicles, Map<Vehicule, Integer> remaining) {
         if (vehicles == null || vehicles.isEmpty()) return null;
 
         int maxSpace = 0;
         List<Vehicule> candidates = new ArrayList<>();
 
         for (Vehicule v : vehicles) {
-            int availableSpace = remaining.getOrDefault(v, 0);
-            if (availableSpace > maxSpace) {
-                maxSpace = availableSpace;
+            int space = remaining.getOrDefault(v, 0);
+            if (space > maxSpace) {
+                maxSpace = space;
                 candidates.clear();
                 candidates.add(v);
-            } else if (availableSpace == maxSpace && availableSpace > 0) {
+            } else if (space == maxSpace && space > 0) {
                 candidates.add(v);
             }
         }
@@ -1409,7 +1483,6 @@ public class VehiculeService {
         if (candidates.isEmpty()) return null;
         if (candidates.size() == 1) return candidates.get(0);
 
-        // En cas d'égalité, choisir par nombre de trajets puis carburant
         return chooseByTrajetsThenCarburant(candidates);
     }
 
