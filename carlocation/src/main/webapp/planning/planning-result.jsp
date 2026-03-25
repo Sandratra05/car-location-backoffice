@@ -19,7 +19,7 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1>🗺️ Planning des trajets</h1>
+        <h1>🗺️ Planning des trajets - ETU003126 , ETU003203, ETU003378</h1>
     </div>
 
     <div class="content">
@@ -130,29 +130,29 @@
                 </table>
         </div>
         <% } %>
-        <%    
+        <%
             List<Reservation> unassigned = (List<Reservation>) request.getAttribute("unassigned");
             if (unassigned != null && !unassigned.isEmpty()) {
         %>
                 <hr/>
                 <div class="card">
-                        <h3>Réservations non assignées</h3>
+                        <h3>Passagers non assignés (reportés)</h3>
                         <table style="width:100%; border-collapse:collapse; margin-top:8px;">
                             <thead style="background:#1e3a5f; text-align:left;">
                                 <tr>
-                                    <th style="padding:8px; border:1px solid #ddd;">Num Réservation</th>
-                                    <th style="padding:8px; border:1px solid #ddd;">Nb Passagers</th>
+                                    <th style="padding:8px; border:1px solid #ddd;">Réservation d'origine</th>
+                                    <th style="padding:8px; border:1px solid #ddd;">Passagers restants</th>
                                     <th style="padding:8px; border:1px solid #ddd;">Hôtel</th>
                                     <th style="padding:8px; border:1px solid #ddd;">Statut</th>
                                 </tr>
                             </thead>
                             <tbody>
                             <% for (Reservation r : unassigned) { %>
-                                <tr>
-                                    <td style="padding:8px; border:1px solid #ddd;">#<%= r.getIdReservation() %> (reportée)</td>
-                                    <td style="padding:8px; border:1px solid #ddd; text-align:right;"><%= r.getNbPassager() %></td>
+                                <tr style="background:#fff3cd;">
+                                    <td style="padding:8px; border:1px solid #ddd;">Clients #<%= r.getIdReservation() %></td>
+                                    <td style="padding:8px; border:1px solid #ddd; text-align:center; font-weight:bold; color:#856404;"><%= r.getNbPassager() %> passager(s)</td>
                                     <td style="padding:8px; border:1px solid #ddd;"><%= r.getHotel() != null ? r.getHotel().getLibelle() : "-" %></td>
-                                    <td style="padding:8px; border:1px solid #ddd; color:orange; font-weight:bold;">Reportée</td>
+                                    <td style="padding:8px; border:1px solid #ddd; color:#856404; font-weight:bold;">Reporté au prochain intervalle</td>
                                 </tr>
                             <% } %>
                             </tbody>
