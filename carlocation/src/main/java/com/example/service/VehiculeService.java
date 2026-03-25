@@ -532,8 +532,10 @@ public class VehiculeService {
             Set<Vehicule> vehiclesUsedInInterval = new HashSet<>();
             List<AssignPair> assignedPairs = new ArrayList<>();
 
-            // Set pour tracker les réservations qui ont été splittées
+            // Set pour tracker les réservations qui ont été splittées DANS CET INTERVALLE
             // (pour prioriser leurs restes lors du remplissage)
+            // NE PAS initialiser avec les leftovers des intervalles précédents
+            // car on veut d'abord traiter les grandes réservations dans l'ordre décroissant
             Set<Integer> splitClientIds = new HashSet<>();
 
             // Liste des réservations à traiter dans ce batch (copie pour modification)
@@ -613,10 +615,9 @@ public class VehiculeService {
                             // Retirer l'ancien reste et ajouter le nouveau
                             lastUnassignedParts.remove(closest);
 
-                            // Tracker cette réservation comme splittée pour prioriser ses restes
-                            if (closest.getIdReservation() != null) {
-                                splitClientIds.add(closest.getIdReservation());
-                            }
+                            // NE PAS ajouter à splitClientIds pour un split pendant le remplissage
+                            // car ce leftover doit être traité pendant le FILL d'un autre véhicule,
+                            // pas priorisé dans la sélection principale
 
                             // Insérer le reste à la bonne position pour maintenir l'ordre décroissant
                             insertSortedDesc(toProcess, partRemaining);
