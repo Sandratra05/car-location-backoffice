@@ -486,6 +486,10 @@ public class VehiculeService {
         lastDepartTimes.clear();
         lastUnassignedParts.clear();
 
+        // Tracker les assignations déjà persistées pour éviter les doublons
+        // Clé = "vehiculeId_reservationId_nbPassager"
+        Set<String> persistedAssignations = new HashSet<>();
+
         if (taMinutes <= 0) taMinutes = 30;
 
         // garantir l'ordre asc par date d'arrivée (utile pour découper correctement les intervalles)
@@ -659,7 +663,12 @@ public class VehiculeService {
                         try {
                             Timestamp vehicleRetour = Reservation.calculHeureRetourFromDepart(naDepart, naToAssign);
                             for (Reservation na : naToAssign) {
-                                persistAssignationWithRetour(v, na, naDepart, vehicleRetour);
+                                // Vérifier si déjà persisté (éviter doublons)
+                                String key = v.getId() + "_" + na.getIdReservation() + "_" + na.getNbPassager();
+                                if (!persistedAssignations.contains(key)) {
+                                    persistAssignationWithRetour(v, na, naDepart, vehicleRetour);
+                                    persistedAssignations.add(key);
+                                }
                             }
                             // Tracker l'heure de retour pour les prochains intervalles
                             expectedReturnTimes.put(v, vehicleRetour);
@@ -788,7 +797,12 @@ public class VehiculeService {
                             try {
                                 Timestamp vehicleRetour = Reservation.calculHeureRetourFromDepart(departTime, allAssigned);
                                 for (Reservation r : allAssigned) {
-                                    persistAssignationWithRetour(v, r, departTime, vehicleRetour);
+                                    // Vérifier si déjà persisté (éviter doublons)
+                                    String key = v.getId() + "_" + r.getIdReservation() + "_" + r.getNbPassager();
+                                    if (!persistedAssignations.contains(key)) {
+                                        persistAssignationWithRetour(v, r, departTime, vehicleRetour);
+                                        persistedAssignations.add(key);
+                                    }
                                 }
                                 expectedReturnTimes.put(v, vehicleRetour);
                             } catch (SQLException ignore) {
@@ -995,7 +1009,12 @@ public class VehiculeService {
 
                     // Persister chaque assignation avec l'heure de départ commune et retour du véhicule
                     for (Reservation r : vReservations) {
-                        persistAssignationWithRetour(v, r, commonDepartTime, vehicleRetour);
+                        // Vérifier si déjà persisté (éviter doublons)
+                        String key = v.getId() + "_" + r.getIdReservation() + "_" + r.getNbPassager();
+                        if (!persistedAssignations.contains(key)) {
+                            persistAssignationWithRetour(v, r, commonDepartTime, vehicleRetour);
+                            persistedAssignations.add(key);
+                        }
                     }
                 }
             }
@@ -1197,7 +1216,21 @@ public class VehiculeService {
     // Helper: collecte les réservations éligibles dont la date d'arrivée effective <= end
     private List<Reservation> collectBatch(List<Reservation> unassigned, Timestamp end, Map<Integer, Timestamp> nextEligibleByReservation) {
         List<Reservation> batch = new ArrayList<>();
+
+        // Collecter les IDs des réservations NA pour les exclure du batch normal
+        // (elles seront traitées via la priorisation NA)
+        Set<Integer> naIds = new HashSet<>();
+        for (Reservation na : lastUnassignedParts) {
+            if (na != null && na.getIdReservation() != null) {
+                naIds.add(na.getIdReservation());
+            }
+        }
+
         for (Reservation r : unassigned) {
+            // Exclure les réservations NA du batch normal (elles seront traitées séparément)
+            if (r != null && r.getIdReservation() != null && naIds.contains(r.getIdReservation())) {
+                continue;
+            }
             Timestamp t = getEffectiveArrival(r, nextEligibleByReservation);
             if (t != null && t.getTime() <= end.getTime()) batch.add(r);
         }
