@@ -1612,15 +1612,301 @@ public class VehiculeService {
     }
     private Reservation cloneReservation(Reservation r, int newNbPassagers) {
         if (r == null) return null;
-        
+
         // On utilise le constructeur complet de votre entité Reservation:
         // public Reservation(Integer idReservation, Integer nbPassager, Timestamp dateHeureArrivee, Hotel hotel, String idClient)
         return new Reservation(
             r.getIdReservation(),
-            newNbPassagers, 
+            newNbPassagers,
             r.getDateHeureArrivee(),
             r.getHotel(),
             r.getIdClient()
         );
+    }
+
+    // ========== GESTION DES RÉSERVATIONS NON ASSIGNÉES (NA) ==========
+
+    /**
+     * F2: getReservationsNA
+     * Récupère les réservations Non Assignées (passagers restants après division
+     * ou réservations qui n'ont pas pu être assignées).
+     *
+     * @return Liste des réservations NA
+     */
+    public List<Reservation> getReservationsNA() {
+        return new ArrayList<>(lastUnassignedParts);
+    }
+
+    /**
+     * F3: fitReservationsNAInVehicule
+     * Si une voiture est de retour (ou disponible), et que les places correspondent
+     * exactement aux clients NA, la voiture repart directement.
+     *
+     * Exemple: voiture 10 places dispo à 13h et qu'il y a 10 clients NA
+     *          -> la voiture repart directement, heure de départ = 13h
+     *
+     * @param vehicule Le véhicule disponible
+     * @param availabilityTime L'heure de disponibilité du véhicule
+     * @param reservationsNA Liste des réservations NA à considérer
+     * @return Map contenant le véhicule et les réservations assignées (peut être vide)
+     */
+    public Map<Vehicule, List<Reservation>> fitReservationsNAInVehicule(
+            Vehicule vehicule,
+            Timestamp availabilityTime,
+            List<Reservation> reservationsNA) throws SQLException {
+
+        Map<Vehicule, List<Reservation>> result = new HashMap<>();
+        if (vehicule == null || reservationsNA == null || reservationsNA.isEmpty()) {
+            return result;
+        }
+
+        int vehicleCapacity = vehicule.getNbPlace();
+
+        // Calculer le total des passagers NA disponibles
+        int totalPassengersNA = 0;
+        for (Reservation r : reservationsNA) {
+            if (r != null && r.getNbPassager() != null) {
+                totalPassengersNA += r.getNbPassager();
+            }
+        }
+
+        // Si le total des passagers NA correspond exactement à la capacité du véhicule
+        if (totalPassengersNA == vehicleCapacity) {
+            List<Reservation> assigned = new ArrayList<>();
+
+            // Assigner toutes les réservations NA au véhicule
+            for (Reservation r : reservationsNA) {
+                if (r == null) continue;
+                assigned.add(r);
+            }
+
+            result.put(vehicule, assigned);
+
+            // Persister les assignations avec l'heure de départ = availabilityTime
+            Timestamp vehicleRetour = Reservation.calculHeureRetourFromDepart(availabilityTime, assigned);
+            for (Reservation r : assigned) {
+                persistAssignationWithRetour(vehicule, r, availabilityTime, vehicleRetour);
+            }
+
+            // Mettre à jour lastDepartTimes
+            lastDepartTimes.put(vehicule, availabilityTime);
+
+            // Retirer les réservations assignées de lastUnassignedParts
+            lastUnassignedParts.removeAll(assigned);
+        }
+
+        return result;
+    }
+
+    /**
+     * F4: vehiculeEnAttente
+     * Si un véhicule est de retour (ou disponible), mais que les clients NA < places,
+     * la voiture ne repart pas mais attend qu'elle soit complète.
+     * La voiture crée un regroupement (heureArrivéeVoiture + TempsDAttente).
+     *
+     * @param vehicule Le véhicule disponible
+     * @param availabilityTime L'heure de disponibilité du véhicule
+     * @param reservationsNA Liste des réservations NA à considérer
+     * @param taMinutes Temps d'attente en minutes pour le regroupement
+     * @return Timestamp de la fin du regroupement (quand la voiture pourra partir), ou null si véhicule plein
+     */
+    public Timestamp vehiculeEnAttente(
+            Vehicule vehicule,
+            Timestamp availabilityTime,
+            List<Reservation> reservationsNA,
+            int taMinutes) {
+
+        if (vehicule == null || availabilityTime == null) {
+            return null;
+        }
+
+        int vehicleCapacity = vehicule.getNbPlace();
+
+        // Calculer le total des passagers NA disponibles
+        int totalPassengersNA = 0;
+        if (reservationsNA != null) {
+            for (Reservation r : reservationsNA) {
+                if (r != null && r.getNbPassager() != null) {
+                    totalPassengersNA += r.getNbPassager();
+                }
+            }
+        }
+
+        // Si le véhicule n'est pas complet avec les NA, il attend
+        if (totalPassengersNA < vehicleCapacity) {
+            // Créer un regroupement : heureArrivéeVoiture + TempsDAttente
+            if (taMinutes <= 0) taMinutes = 30;
+            long waitMs = taMinutes * 60L * 1000L;
+            return new Timestamp(availabilityTime.getTime() + waitMs);
+        }
+
+        // Si le véhicule est complet ou surpassé, pas besoin d'attendre
+        return null;
+    }
+
+    /**
+     * F1: putReservationsNAInVehiculeFirst
+     * S'il y a un nouveau regroupement et qu'il y a des clients NA, on les priorise.
+     * Cette fonction tente d'assigner les réservations NA aux véhicules disponibles
+     * en priorité.
+     *
+     * @param availableVehicles Liste des véhicules disponibles
+     * @param vehicleAvailability Map des heures de disponibilité des véhicules
+     * @param taMinutes Temps d'attente en minutes
+     * @return Map des véhicules avec leurs réservations NA assignées
+     */
+    public Map<Vehicule, List<Reservation>> putReservationsNAInVehiculeFirst(
+            List<Vehicule> availableVehicles,
+            Map<Vehicule, Timestamp> vehicleAvailability,
+            int taMinutes) throws SQLException {
+
+        Map<Vehicule, List<Reservation>> result = new HashMap<>();
+        if (availableVehicles == null || availableVehicles.isEmpty()) {
+            return result;
+        }
+
+        List<Reservation> reservationsNA = getReservationsNA();
+        if (reservationsNA.isEmpty()) {
+            return result;
+        }
+
+        // Trier les véhicules par capacité décroissante
+        List<Vehicule> sortedVehicles = new ArrayList<>(availableVehicles);
+        sortedVehicles.sort((v1, v2) -> Integer.compare(v2.getNbPlace(), v1.getNbPlace()));
+
+        // Trier les réservations NA par nombre de passagers décroissant
+        List<Reservation> sortedNA = new ArrayList<>(reservationsNA);
+        sortedNA.sort((a, b) -> {
+            int na = a.getNbPassager() != null ? a.getNbPassager() : 0;
+            int nb = b.getNbPassager() != null ? b.getNbPassager() : 0;
+            return Integer.compare(nb, na);
+        });
+
+        // Essayer d'assigner les NA aux véhicules
+        for (Vehicule v : sortedVehicles) {
+            if (sortedNA.isEmpty()) break;
+
+            Timestamp availability = vehicleAvailability != null ? vehicleAvailability.get(v) : null;
+            if (availability == null) {
+                // Véhicule disponible immédiatement, utiliser l'heure actuelle
+                availability = new Timestamp(System.currentTimeMillis());
+            }
+
+            int vehicleCapacity = v.getNbPlace();
+
+            // Calculer combien de passagers NA peuvent être assignés
+            int totalPassengersNA = 0;
+            for (Reservation r : sortedNA) {
+                if (r != null && r.getNbPassager() != null) {
+                    totalPassengersNA += r.getNbPassager();
+                }
+            }
+
+            // Vérifier si le véhicule peut être rempli exactement
+            if (totalPassengersNA == vehicleCapacity) {
+                // F3: Le véhicule repart directement
+                Map<Vehicule, List<Reservation>> fitResult = fitReservationsNAInVehicule(v, availability, sortedNA);
+                result.putAll(fitResult);
+                sortedNA.clear();
+            } else if (totalPassengersNA > vehicleCapacity) {
+                // Assigner autant que possible
+                List<Reservation> toAssign = new ArrayList<>();
+                int assigned = 0;
+
+                for (int i = 0; i < sortedNA.size() && assigned < vehicleCapacity; i++) {
+                    Reservation r = sortedNA.get(i);
+                    int need = r.getNbPassager() != null ? r.getNbPassager() : 0;
+
+                    if (assigned + need <= vehicleCapacity) {
+                        toAssign.add(r);
+                        assigned += need;
+                    } else if (assigned < vehicleCapacity) {
+                        // Split la réservation
+                        int remaining = vehicleCapacity - assigned;
+                        Reservation partToAssign = cloneReservation(r, remaining);
+                        Reservation partRemaining = cloneReservation(r, need - remaining);
+
+                        toAssign.add(partToAssign);
+                        assigned = vehicleCapacity;
+
+                        // Mettre à jour sortedNA avec le reste
+                        sortedNA.set(i, partRemaining);
+                    }
+                }
+
+                if (!toAssign.isEmpty() && assigned == vehicleCapacity) {
+                    // Véhicule complet, il peut partir
+                    result.computeIfAbsent(v, k -> new ArrayList<>()).addAll(toAssign);
+
+                    // Persister les assignations
+                    Timestamp vehicleRetour = Reservation.calculHeureRetourFromDepart(availability, toAssign);
+                    for (Reservation r : toAssign) {
+                        persistAssignationWithRetour(v, r, availability, vehicleRetour);
+                    }
+
+                    lastDepartTimes.put(v, availability);
+
+                    // Retirer les réservations assignées de sortedNA et lastUnassignedParts
+                    sortedNA.removeAll(toAssign);
+                    lastUnassignedParts.removeAll(toAssign);
+                }
+            }
+            // Si totalPassengersNA < vehicleCapacity : F4 vehiculeEnAttente sera appelé après
+        }
+
+        return result;
+    }
+
+    /**
+     * Fonction principale: assignFirstReservationsNA
+     * Gère l'assignation prioritaire des réservations NA.
+     *
+     * CONDITION GLOBALE: Lorsqu'une voiture est disponible et que des clients NA y sont assignés,
+     *                    dès que la voiture est complète, elle repart.
+     *
+     * @param intervalEnd Fin de l'intervalle courant
+     * @param taMinutes Temps d'attente en minutes
+     * @return Map des véhicules avec leurs réservations NA assignées et leurs infos de départ
+     */
+    public Map<Vehicule, List<Reservation>> assignFirstReservationsNA(Timestamp intervalEnd, int taMinutes) throws SQLException {
+        Map<Vehicule, List<Reservation>> result = new HashMap<>();
+
+        List<Reservation> reservationsNA = getReservationsNA();
+        if (reservationsNA.isEmpty()) {
+            return result;
+        }
+
+        // Récupérer les véhicules disponibles avant la fin de l'intervalle
+        Date dateForDisponibilite = new Date(intervalEnd.getTime());
+        Map<Vehicule, Timestamp> vehicleAvailabilityMap = findVehiclesAvailableByEndOfInterval(intervalEnd, dateForDisponibilite);
+
+        if (vehicleAvailabilityMap.isEmpty()) {
+            return result;
+        }
+
+        List<Vehicule> availableVehicles = new ArrayList<>(vehicleAvailabilityMap.keySet());
+
+        // F1: Prioriser les réservations NA
+        result = putReservationsNAInVehiculeFirst(availableVehicles, vehicleAvailabilityMap, taMinutes);
+
+        // Vérifier quels véhicules sont en attente (pas complets)
+        reservationsNA = getReservationsNA(); // Rafraîchir après les assignations
+
+        for (Vehicule v : availableVehicles) {
+            if (result.containsKey(v)) continue; // Déjà assigné
+
+            Timestamp availability = vehicleAvailabilityMap.get(v);
+
+            // F4: Vérifier si le véhicule doit attendre
+            Timestamp regroupementEnd = vehiculeEnAttente(v, availability, reservationsNA, taMinutes);
+
+            if (regroupementEnd != null) {
+                // Le véhicule attend jusqu'à regroupementEnd
+                // On stocke cette information pour le prochain intervalle
+                // (les réservations NA restent dans lastUnassignedParts jusqu'au prochain cycle)
+            }
+        }
+
+        return result;
     }
 }
