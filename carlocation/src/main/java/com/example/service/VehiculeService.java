@@ -504,8 +504,37 @@ public class VehiculeService {
         // qu'à partir de la fin de cet intervalle.
         Map<Integer, Timestamp> nextEligibleByReservation = new HashMap<>();
 
+        // Tracker les heures de retour prévues des véhicules (pour créer des intervalles basés sur les retours)
+        Map<Vehicule, Timestamp> expectedReturnTimes = new HashMap<>();
+
         while (!unassigned.isEmpty()) {
             Timestamp start = findNextIntervalStart(unassigned, nextEligibleByReservation);
+
+            // Si plus de réservations naturelles mais qu'il reste des non-assignées,
+            // chercher le prochain retour de véhicule pour créer un nouvel intervalle
+            if (start == null && !unassigned.isEmpty()) {
+                // Trouver l'heure de retour la plus proche
+                Timestamp earliestReturn = null;
+                for (Timestamp returnTime : expectedReturnTimes.values()) {
+                    if (returnTime != null && (earliestReturn == null || returnTime.before(earliestReturn))) {
+                        earliestReturn = returnTime;
+                    }
+                }
+
+                if (earliestReturn != null) {
+                    start = earliestReturn;
+                    // Mettre à jour les éligibilités des réservations reportées pour ce nouvel intervalle
+                    for (Reservation r : unassigned) {
+                        if (r != null && r.getIdReservation() != null) {
+                            Timestamp eligible = nextEligibleByReservation.get(r.getIdReservation());
+                            if (eligible == null || eligible.before(start)) {
+                                nextEligibleByReservation.put(r.getIdReservation(), start);
+                            }
+                        }
+                    }
+                }
+            }
+
             if (start == null) break;
             Timestamp end = new Timestamp(start.getTime() + taMinutes * 60L * 1000L);
 
@@ -602,6 +631,9 @@ public class VehiculeService {
                             // NE PAS ajouter à assignedPairs (pour ne pas participer au calcul de l'heure commune)
                             reservationsNA.remove(na);
                             lastUnassignedParts.remove(na);
+                            // IMPORTANT: Retirer aussi de unassigned et batch pour éviter re-assignation
+                            unassigned.remove(na);
+                            batch.remove(na);
                         }
 
                         remaining.put(v, 0);
@@ -613,6 +645,8 @@ public class VehiculeService {
                             for (Reservation na : naToAssign) {
                                 persistAssignationWithRetour(v, na, naDepart, vehicleRetour);
                             }
+                            // Tracker l'heure de retour pour les prochains intervalles
+                            expectedReturnTimes.put(v, vehicleRetour);
                         } catch (SQLException ignore) {
                         }
 
@@ -806,6 +840,11 @@ public class VehiculeService {
                     } catch (SQLException ignore) {
                     }
 
+                    // Tracker l'heure de retour pour les prochains intervalles
+                    if (vehicleRetour != null) {
+                        expectedReturnTimes.put(v, vehicleRetour);
+                    }
+
                     // Persister chaque assignation avec l'heure de départ commune et retour du véhicule
                     for (Reservation r : vReservations) {
                         persistAssignationWithRetour(v, r, commonDepartTime, vehicleRetour);
@@ -837,7 +876,10 @@ public class VehiculeService {
                 int passengers = r.getNbPassager() != null ? r.getNbPassager() : 0;
                 if (passengers > 0) {
                     // C'est une partie restante non assignée
-                    unassigned.add(r);
+                    // Éviter les doublons dans unassigned
+                    if (!unassigned.contains(r)) {
+                        unassigned.add(r);
+                    }
                     Integer id = r.getIdReservation();
                     if (id != null) {
                         nextEligibleByReservation.put(id, end);
@@ -864,8 +906,18 @@ public class VehiculeService {
                 }
             }
 
-            // Si plus aucune réservation naturelle, les réservations restantes sont définitivement non assignées
-            if (!hasNaturalReservationsLeft) {
+            // Vérifier s'il y a des véhicules qui retournent après cet intervalle
+            boolean hasVehiclesReturning = false;
+            for (Timestamp returnTime : expectedReturnTimes.values()) {
+                if (returnTime != null && returnTime.after(end)) {
+                    hasVehiclesReturning = true;
+                    break;
+                }
+            }
+
+            // Si plus aucune réservation naturelle ET plus de véhicules qui retournent,
+            // les réservations restantes sont définitivement non assignées
+            if (!hasNaturalReservationsLeft && !hasVehiclesReturning) {
                 // Collecter toutes les réservations déjà assignées dans result
                 Set<Reservation> alreadyAssigned = new HashSet<>();
                 for (List<Reservation> assignedList : result.values()) {
