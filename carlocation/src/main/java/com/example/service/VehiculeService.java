@@ -642,19 +642,12 @@ public class VehiculeService {
                         }
 
                         // IMPORTANT: Supprimer par ID (pas par référence d'objet) pour éviter re-assignation
-                        // SAUF si la réservation est encore dans lastUnassignedParts (partie restante)
-                        Set<Integer> stillInUnassignedParts = new HashSet<>();
-                        for (Reservation r : lastUnassignedParts) {
-                            if (r != null && r.getIdReservation() != null) {
-                                stillInUnassignedParts.add(r.getIdReservation());
-                            }
-                        }
+                        // On retire TOUS les objets avec cet ID - les clones dans lastUnassignedParts
+                        // seront traités séparément via la priorisation NA
                         batch.removeIf(r -> r != null && r.getIdReservation() != null
-                                && naAssignedIds.contains(r.getIdReservation())
-                                && !stillInUnassignedParts.contains(r.getIdReservation()));
+                                && naAssignedIds.contains(r.getIdReservation()));
                         unassigned.removeIf(r -> r != null && r.getIdReservation() != null
-                                && naAssignedIds.contains(r.getIdReservation())
-                                && !stillInUnassignedParts.contains(r.getIdReservation()));
+                                && naAssignedIds.contains(r.getIdReservation()));
 
                         remaining.put(v, 0);
                         // NE PAS ajouter à vehiclesUsedInInterval (pour ne pas participer au calcul de l'heure commune)
@@ -768,20 +761,12 @@ public class VehiculeService {
                         }
 
                         // Supprimer de batch et unassigned par ID (pas par référence d'objet)
-                        // SAUF si la réservation est encore dans lastUnassignedParts (partie restante)
-                        Set<Integer> stillInUnassignedParts = new HashSet<>();
-                        for (Reservation r : lastUnassignedParts) {
-                            if (r != null && r.getIdReservation() != null) {
-                                stillInUnassignedParts.add(r.getIdReservation());
-                            }
-                        }
-
+                        // On retire TOUS les objets avec cet ID - les clones dans lastUnassignedParts
+                        // seront traités séparément via la priorisation NA
                         batch.removeIf(r -> r != null && r.getIdReservation() != null
-                                && assignedIds.contains(r.getIdReservation())
-                                && !stillInUnassignedParts.contains(r.getIdReservation()));
+                                && assignedIds.contains(r.getIdReservation()));
                         unassigned.removeIf(r -> r != null && r.getIdReservation() != null
-                                && assignedIds.contains(r.getIdReservation())
-                                && !stillInUnassignedParts.contains(r.getIdReservation()));
+                                && assignedIds.contains(r.getIdReservation()));
 
                         // Ajouter au résultat
                         for (Reservation r : allAssigned) {
