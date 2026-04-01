@@ -1,0 +1,44 @@
+TL : Sariaka ETU003378
+Dev Framework : Finoana ETU003203, Sandratra ETU003126
+
+Todo Sprint 8 :
+
+### Finoana 
+=> Creer une fonction : assignFirstReservationsNA
+    * F1 : putReservationsNAInVehiculeFirst 
+        - S'il y a un nouveau regroupement, et qu'il y a des clients NA, on les priorise
+    * F2 : getReservationsNA
+        - Recuperer les reservations NA
+    * F3 : fitReserationsNAInVehicule
+        - Si une voiture est de retour (ou disponible), et que :
+            place voiture = X clients dans reservations NA 
+                ex. voiture 10 places dispo a 13h et qu'il 10 clients NA qui peuvent y etre assignes 
+                la voiture repart directement, heure de depart = 13h
+    * F4 : vehiculeEnAttente
+        - Si une vehicule est de retour (ou disponible), mais :
+            les reservations NA < place voiture
+            ex. voiture 8 places et cliens NA = 3
+            la voiture ne repart pas mais attend qu'elle soit complete
+            la voiture cree un regroupement (heureArriveeVoiture + TA)
+    CONDITION GLOBALE : lorsqu'une voiture est disponible, et que des clients NA y sont assignees,
+                        des que la voiture est complete, elle repart
+
+
+### Sandratra
+=> Regles de gestion a revoir 
+    * lorsque la difference de l'ecart du plus est la meme ,
+    on priorise la reservation qui complete la voiture
+    ex, si voiture 15 places
+    R1 : 10 clients
+    R2 : 7 clients
+    R3 : 3 clients
+    => R1 en priorite (par ordre decroissant)
+    => quand on complete (par le plus proche)
+    ici , il reste 5 places, donc 7-5 = 2, mais 5-3 = 2 -> l'ecart du plus proche est la meme
+    ALORS, on met la reservation qui le complete c'est a dire le 7
+    * donc si , voiture 15 places :
+    R1 : 10 clients
+    R2 : 7 clients
+    R3 : 4 clients
+    => on met R1, ensuite R3, et on prend 1 client dans R2
+    * au prochain regroupement on re trie 
