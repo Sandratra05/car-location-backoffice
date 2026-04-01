@@ -40,5 +40,19 @@ Todo Sprint 8 :
     R1 : 10 clients
     R2 : 7 clients
     R3 : 4 clients
-    => on met R1, ensuite R3, et on prend 1 client dans R2
-    * au prochain regroupement on re trie 
+    => on met R1, ensuite R2
+    -> on prend le plus proche qui le complete
+    * au prochain regroupement on re trie toujours les NA
+
+### Declenchement : Finoana
+    Si vehicule n'est pas encore complet a son heure d'arrivee , il fait le regroupement et 
+    respecte le TA 
+
+    Les voitures declenchent en premier le TA
+    Si voiture disponible a 8h il fait le regroupement a partir de 8h + TA , et prend les vols dans cet intervalle
+    S'il n'y a pas de vol dans cette tranche , le premier vol qui arrive declenchera le TA
+
+    Si voiture V1 dispo a 8h -> 3 places
+    et si R1 arrive a 6h = 5 personnes
+    et R2 a 7h = 8 personnes
+    on trie toujours par ordre de passager, et donc c'est R2 qui repart
