@@ -1173,12 +1173,16 @@ public class VehiculeService {
             }
         }
 
-        // Collecter les IDs des réservations déjà assignées dans result
+        // Collecter les clés (ID + nbPassager) des réservations déjà assignées dans result
+        // Utiliser ID + nbPassager pour distinguer les parties splittées
+        Set<String> alreadyAssignedKeys = new HashSet<>();
         Set<Integer> alreadyAssignedIds = new HashSet<>();
         for (List<Reservation> assignedList : result.values()) {
             for (Reservation r : assignedList) {
                 if (r != null && r.getIdReservation() != null) {
                     alreadyAssignedIds.add(r.getIdReservation());
+                    int nbPass = r.getNbPassager() != null ? r.getNbPassager() : 0;
+                    alreadyAssignedKeys.add(r.getIdReservation() + "_" + nbPass);
                 }
             }
         }
@@ -1195,8 +1199,13 @@ public class VehiculeService {
         }
 
         // Nettoyer lastUnassignedParts : retirer les réservations déjà assignées
-        lastUnassignedParts.removeIf(r -> r != null && r.getIdReservation() != null
-                && alreadyAssignedIds.contains(r.getIdReservation()));
+        // Utiliser la clé ID + nbPassager pour ne pas retirer les restes de réservations splittées
+        lastUnassignedParts.removeIf(r -> {
+            if (r == null || r.getIdReservation() == null) return false;
+            int nbPass = r.getNbPassager() != null ? r.getNbPassager() : 0;
+            String key = r.getIdReservation() + "_" + nbPass;
+            return alreadyAssignedKeys.contains(key);
+        });
 
         return result;
     }

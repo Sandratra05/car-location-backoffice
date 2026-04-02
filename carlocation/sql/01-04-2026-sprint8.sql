@@ -120,7 +120,7 @@ INSERT INTO vehicule (reference, nb_place, type_carburant) VALUES
   (19,  TIMESTAMP '2026-03-19 08:00:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL2' LIMIT 1), 'C001'),
   (10, TIMESTAMP '2026-03-19 09:40:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL1' LIMIT 1), 'C002'),
   (7, TIMESTAMP '2026-03-19 09:45:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL1' LIMIT 1), 'C002'),
-  (6, TIMESTAMP '2026-03-19 09:45:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL1' LIMIT 1), 'C003');
+  (3, TIMESTAMP '2026-03-19 09:45:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL1' LIMIT 1), 'C003');
 
 -- DISTANCES (aéroport → hôtels)
 INSERT INTO distance (from_hotel_id, to_hotel_id, kilometre) VALUES
