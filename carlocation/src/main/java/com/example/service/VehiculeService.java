@@ -511,7 +511,18 @@ public class VehiculeService {
         // Tracker les heures de retour prévues des véhicules (pour créer des intervalles basés sur les retours)
         Map<Vehicule, Timestamp> expectedReturnTimes = new HashMap<>();
 
+        // Protection contre les boucles infinies
+        int maxIterations = allReservations.size() * 10; // Maximum raisonnable d'itérations
+        int iterationCount = 0;
+
         while (!unassigned.isEmpty()) {
+            iterationCount++;
+            if (iterationCount > maxIterations) {
+                // Sortir de la boucle pour éviter un blocage infini
+                // Les réservations restantes seront dans lastUnassignedParts
+                break;
+            }
+
             Timestamp start = findNextIntervalStart(unassigned, nextEligibleByReservation);
 
             // Si plus de réservations naturelles mais qu'il reste des non-assignées,
@@ -543,7 +554,12 @@ public class VehiculeService {
             Timestamp end = new Timestamp(start.getTime() + taMinutes * 60L * 1000L);
 
             List<Reservation> batch = collectBatch(unassigned, end, nextEligibleByReservation);
-            if (batch.isEmpty()) continue;
+
+            // Vérifier s'il y a des réservations NA à traiter
+            List<Reservation> reservationsNA = getReservationsNA();
+
+            // Si batch est vide ET pas de NA, on continue
+            if (batch.isEmpty() && reservationsNA.isEmpty()) continue;
 
             // Récupérer les véhicules disponibles AVANT la fin de l'intervalle (y compris ceux qui reviennent pendant)
             Date dateForDisponibilite = new Date(start.getTime());
@@ -555,6 +571,20 @@ public class VehiculeService {
                     if (r == null || r.getIdReservation() == null) continue;
                     nextEligibleByReservation.put(r.getIdReservation(), end);
                 }
+                // Reporter aussi les NA au prochain intervalle
+                for (Reservation na : reservationsNA) {
+                    if (na == null || na.getIdReservation() == null) continue;
+                    nextEligibleByReservation.put(na.getIdReservation(), end);
+                }
+                // Retirer les NA de unassigned pour éviter boucle infinie
+                // Elles seront re-traitées via lastUnassignedParts
+                Set<Integer> naIds = new HashSet<>();
+                for (Reservation na : reservationsNA) {
+                    if (na != null && na.getIdReservation() != null) {
+                        naIds.add(na.getIdReservation());
+                    }
+                }
+                unassigned.removeIf(r -> r != null && r.getIdReservation() != null && naIds.contains(r.getIdReservation()));
                 continue;
             }
 
@@ -576,7 +606,7 @@ public class VehiculeService {
             // Les NA sont ajoutées au batch pour être traitées AVANT les nouvelles réservations
             // IMPORTANT: Si un véhicule est COMPLET avec des NA, il part IMMÉDIATEMENT
             //            (il ne participe PAS au calcul de l'heure de départ commune)
-            List<Reservation> reservationsNA = getReservationsNA();
+            // reservationsNA déjà récupéré plus haut
             if (!reservationsNA.isEmpty()) {
                 // Trier les NA par nombre de passagers décroissant
                 reservationsNA.sort((a, b) -> {
@@ -816,6 +846,21 @@ public class VehiculeService {
                 }
             }
             // ========== FIN PRIORISATION NA ==========
+
+            // IMPORTANT: Retirer les NA qui ont été traitées de unassigned
+            // pour éviter une boucle infinie
+            Set<Integer> processedNaIds = new HashSet<>();
+            for (Reservation na : getReservationsNA()) {
+                // Les NA restantes dans lastUnassignedParts seront re-traitées au prochain intervalle
+                // Mais on doit les retirer de unassigned car elles sont maintenant des "restes"
+                if (na != null && na.getIdReservation() != null) {
+                    processedNaIds.add(na.getIdReservation());
+                }
+            }
+            // Retirer de unassigned toutes les réservations dont l'ID est dans lastUnassignedParts
+            // car elles seront re-traitées via la priorisation NA
+            unassigned.removeIf(r -> r != null && r.getIdReservation() != null
+                    && processedNaIds.contains(r.getIdReservation()));
 
             // Liste des réservations à traiter dans ce batch (copie pour modification)
             // Trier UNE SEULE FOIS au début par ordre décroissant de passagers
