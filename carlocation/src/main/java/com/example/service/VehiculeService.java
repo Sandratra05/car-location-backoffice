@@ -688,36 +688,48 @@ public class VehiculeService {
                             }
                         }
 
-                        // Trier par nombre de passagers décroissant
-                        resasInInterval.sort((a, b) -> {
-                            int pa = a.getNbPassager() != null ? a.getNbPassager() : 0;
-                            int pb = b.getNbPassager() != null ? b.getNbPassager() : 0;
-                            return Integer.compare(pb, pa);
-                        });
-
-                        // Assigner les réservations qui rentrent dans les places restantes
+                        // Assigner les réservations en choisissant la plus proche du nombre de places restantes
+                        // Logique : prendre la réservation dont |nbPassager - placesRestantes| est minimal
+                        // En cas d'égalité, prendre celle avec le plus de passagers (plus optimal)
                         int remainingSpace = vehicleCapacity - assignedPassengers;
                         List<Reservation> additionalAssigned = new ArrayList<>();
                         List<Reservation> originalsToRemove = new ArrayList<>(); // Track originals to remove
-                        for (Reservation r : resasInInterval) {
-                            int need = r.getNbPassager() != null ? r.getNbPassager() : 0;
+                        List<Reservation> availableResas = new ArrayList<>(resasInInterval);
+
+                        while (remainingSpace > 0 && !availableResas.isEmpty()) {
+                            // Trouver la réservation la plus proche du nombre de places restantes
+                            final int currentRemainingSpace = remainingSpace;
+                            availableResas.sort((a, b) -> {
+                                int pa = a.getNbPassager() != null ? a.getNbPassager() : 0;
+                                int pb = b.getNbPassager() != null ? b.getNbPassager() : 0;
+                                int distA = Math.abs(pa - currentRemainingSpace);
+                                int distB = Math.abs(pb - currentRemainingSpace);
+                                // Trier par distance croissante, puis par nombre de passagers décroissant
+                                if (distA != distB) {
+                                    return Integer.compare(distA, distB);
+                                }
+                                return Integer.compare(pb, pa); // En cas d'égalité, le plus grand d'abord
+                            });
+
+                            Reservation best = availableResas.remove(0);
+                            int need = best.getNbPassager() != null ? best.getNbPassager() : 0;
+
                             if (need <= remainingSpace) {
-                                additionalAssigned.add(r);
-                                originalsToRemove.add(r); // Track the original
+                                additionalAssigned.add(best);
+                                originalsToRemove.add(best);
                                 remainingSpace -= need;
                                 assignedPassengers += need;
                             } else if (remainingSpace > 0) {
                                 // Split la réservation
-                                Reservation partToAssign = cloneReservation(r, remainingSpace);
-                                Reservation partRemaining = cloneReservation(r, need - remainingSpace);
+                                Reservation partToAssign = cloneReservation(best, remainingSpace);
+                                Reservation partRemaining = cloneReservation(best, need - remainingSpace);
                                 additionalAssigned.add(partToAssign);
-                                originalsToRemove.add(r); // Track the ORIGINAL to remove
+                                originalsToRemove.add(best); // Track the ORIGINAL to remove
                                 assignedPassengers += remainingSpace;
                                 remainingSpace = 0;
                                 // Ajouter le reste aux NA pour traitement ultérieur
                                 lastUnassignedParts.add(partRemaining);
                             }
-                            if (remainingSpace <= 0) break;
                         }
 
                         // Calculer l'heure de départ
@@ -1867,45 +1879,33 @@ public class VehiculeService {
 
     /**
      * Trouve la meilleure réservation dans une liste selon les critères:
-     * 1. Privilégie celles qui rentrent (passagers <= places restantes)
-     * 2. Parmi celles qui rentrent, prend celle la plus proche de l'espace restant
-     * 3. En cas d'égalité, prend la plus grande
+     * 1. Prend celle la plus proche de l'espace restant (distance absolue |passagers - placesRestantes|)
+     * 2. En cas d'égalité de distance, prend la plus grande (plus optimal pour remplir)
      */
     private Reservation findBestReservationInList(List<Reservation> reservations, int remainingSpace) {
         if (reservations == null || reservations.isEmpty()) return null;
 
         Reservation best = null;
         int bestDiff = Integer.MAX_VALUE;
-        boolean bestFits = false;
 
         for (Reservation r : reservations) {
             if (r == null) continue;
             int passengers = r.getNbPassager() != null ? r.getNbPassager() : 0;
             if (passengers <= 0) continue;
 
-            boolean fits = passengers <= remainingSpace;
             int diff = Math.abs(passengers - remainingSpace);
 
-            // Priorité : ceux qui rentrent d'abord
-            if (fits && !bestFits) {
-                // r rentre mais pas best -> r est meilleur
+            if (diff < bestDiff) {
+                // Plus proche -> meilleur
                 best = r;
                 bestDiff = diff;
-                bestFits = true;
-            } else if (fits == bestFits) {
-                // Même catégorie (tous deux rentrent ou non)
-                if (diff < bestDiff) {
+            } else if (diff == bestDiff && best != null) {
+                // Égalité de distance, prendre le plus grand (plus optimal)
+                int bestPass = best.getNbPassager() != null ? best.getNbPassager() : 0;
+                if (passengers > bestPass) {
                     best = r;
-                    bestDiff = diff;
-                } else if (diff == bestDiff && best != null) {
-                    // Égalité de différence, prendre le plus grand
-                    int bestPass = best.getNbPassager() != null ? best.getNbPassager() : 0;
-                    if (passengers > bestPass) {
-                        best = r;
-                    }
                 }
             }
-            // Si r ne rentre pas mais best rentre -> on garde best
         }
 
         return best;

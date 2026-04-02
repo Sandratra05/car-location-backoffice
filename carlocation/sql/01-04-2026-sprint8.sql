@@ -112,23 +112,24 @@ INSERT INTO parametre (vitesse_moyenne_kmh, temps_attente_min) VALUES
 
 -- VEHICULES
 INSERT INTO vehicule (reference, nb_place, type_carburant) VALUES
-  ('VEHICULE1', 3, 'DIESEL'),
-  ('VEHICULE2', 5, 'DIESEL'),
-  ('VEHICULE3', 10,  'DIESEL');
+  --('VEHICULE1', 3, 'DIESEL'),
+  --('VEHICULE2', 5, 'DIESEL'),
+  ('VEHICULE3', 12,  'DIESEL');
 
  INSERT INTO reservation (nb_passager, date_heure_arrivee, id_hotel, id_client) VALUES
-  (10,  TIMESTAMP '2026-03-19 08:00:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL2' LIMIT 1), 'C001'),
-  (8, TIMESTAMP '2026-03-19 08:10:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL1' LIMIT 1), 'C002'),
-  (3, TIMESTAMP '2026-03-19 09:00:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL1' LIMIT 1), 'C003');
+  (19,  TIMESTAMP '2026-03-19 08:00:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL2' LIMIT 1), 'C001'),
+  (10, TIMESTAMP '2026-03-19 09:40:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL1' LIMIT 1), 'C002'),
+  (7, TIMESTAMP '2026-03-19 09:45:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL1' LIMIT 1), 'C002'),
+  (6, TIMESTAMP '2026-03-19 09:45:00', (SELECT id_hotel FROM hotel WHERE code='HOTEL1' LIMIT 1), 'C003');
 
 -- DISTANCES (aéroport → hôtels)
 INSERT INTO distance (from_hotel_id, to_hotel_id, kilometre) VALUES
   ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='HOTEL1' LIMIT 1), 35.00),
-  ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='HOTEL2' LIMIT 1), 90.00),
+  ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='HOTEL2' LIMIT 1), 35.00),
   -- ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='CARLTON-01' LIMIT 1), 25.00),
   -- ((SELECT id_hotel FROM hotel WHERE code='AIR-MAD' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='COLBERT-01' LIMIT 1), 20.00),
 
   ((SELECT id_hotel FROM hotel WHERE code='HOTEL1' LIMIT 1), (SELECT id_hotel FROM hotel WHERE code='HOTEL2' LIMIT 1), 60.00);
   
 
-INSERT INTO disponibilite (id_vehicule, date_disponible, heure_disponible) VALUES (1, '2026-03-19', '09:10:00');
+--INSERT INTO disponibilite (id_vehicule, date_disponible, heure_disponible) VALUES (1, '2026-03-19', '09:10:00');
