@@ -701,146 +701,269 @@ public class VehiculeService {
                         // Stocker l'heure de départ pour ce véhicule
                         lastDepartTimes.put(v, naDepart);
                     }
-                    // Si le véhicule n'est pas complet avec NA → déclencher regroupement
+                    // Si le véhicule n'est pas complet avec NA → vérifier d'abord les réservations à l'heure exacte
                     else if (assignedPassengers > 0 && assignedPassengers < vehicleCapacity && !naToAssign.isEmpty()) {
                         // Le véhicule a des NA mais n'est pas complet
-                        // Il déclenche un regroupement [vehicleAvailability → vehicleAvailability + TA]
                         Timestamp regroupementStart = vehicleAvailability != null ? vehicleAvailability : start;
-                        Timestamp regroupementEnd = new Timestamp(regroupementStart.getTime() + taMinutes * 60L * 1000L);
 
-                        // Chercher les réservations dans l'intervalle de regroupement (hors NA)
-                        List<Reservation> resasInInterval = new ArrayList<>();
+                        // ========== ÉTAPE 1: Vérifier les réservations à l'HEURE EXACTE de disponibilité ==========
+                        // Si le véhicule devient COMPLET avec ces réservations → il part IMMÉDIATEMENT
+                        List<Reservation> resasAtExactTime = new ArrayList<>();
                         for (Reservation r : batch) {
                             if (r == null || naToAssign.contains(r)) continue;
                             Timestamp arrival = r.getDateHeureArrivee();
-                            if (arrival != null && !arrival.before(regroupementStart) && arrival.before(regroupementEnd)) {
-                                resasInInterval.add(r);
+                            // Réservation à l'heure EXACTE de disponibilité
+                            if (arrival != null && arrival.equals(regroupementStart)) {
+                                resasAtExactTime.add(r);
                             }
                         }
 
-                        // Assigner les réservations en choisissant la plus proche du nombre de places restantes
-                        // Logique : prendre la réservation dont |nbPassager - placesRestantes| est minimal
-                        // En cas d'égalité, prendre celle avec le plus de passagers (plus optimal)
-                        int remainingSpace = vehicleCapacity - assignedPassengers;
-                        List<Reservation> additionalAssigned = new ArrayList<>();
-                        List<Reservation> originalsToRemove = new ArrayList<>(); // Track originals to remove
-                        List<Reservation> availableResas = new ArrayList<>(resasInInterval);
+                        // Essayer d'assigner les réservations à l'heure exacte
+                        int remainingSpaceExact = vehicleCapacity - assignedPassengers;
+                        List<Reservation> assignedAtExactTime = new ArrayList<>();
+                        List<Reservation> originalsToRemoveExact = new ArrayList<>();
 
-                        while (remainingSpace > 0 && !availableResas.isEmpty()) {
-                            // Trouver la réservation la plus proche du nombre de places restantes
-                            final int currentRemainingSpace = remainingSpace;
-                            availableResas.sort((a, b) -> {
-                                int pa = a.getNbPassager() != null ? a.getNbPassager() : 0;
-                                int pb = b.getNbPassager() != null ? b.getNbPassager() : 0;
-                                int distA = Math.abs(pa - currentRemainingSpace);
-                                int distB = Math.abs(pb - currentRemainingSpace);
-                                // Trier par distance croissante, puis par nombre de passagers décroissant
-                                if (distA != distB) {
-                                    return Integer.compare(distA, distB);
-                                }
-                                return Integer.compare(pb, pa); // En cas d'égalité, le plus grand d'abord
-                            });
+                        // Trier par proximité des places restantes
+                        final int sortRemainingSpace = remainingSpaceExact;
+                        resasAtExactTime.sort((a, b) -> {
+                            int pa = a.getNbPassager() != null ? a.getNbPassager() : 0;
+                            int pb = b.getNbPassager() != null ? b.getNbPassager() : 0;
+                            int distA = Math.abs(pa - sortRemainingSpace);
+                            int distB = Math.abs(pb - sortRemainingSpace);
+                            if (distA != distB) return Integer.compare(distA, distB);
+                            return Integer.compare(pb, pa);
+                        });
 
-                            Reservation best = availableResas.remove(0);
-                            int need = best.getNbPassager() != null ? best.getNbPassager() : 0;
-
-                            if (need <= remainingSpace) {
-                                additionalAssigned.add(best);
-                                originalsToRemove.add(best);
-                                remainingSpace -= need;
+                        for (Reservation r : resasAtExactTime) {
+                            int need = r.getNbPassager() != null ? r.getNbPassager() : 0;
+                            if (need <= remainingSpaceExact) {
+                                assignedAtExactTime.add(r);
+                                originalsToRemoveExact.add(r);
+                                remainingSpaceExact -= need;
                                 assignedPassengers += need;
-                            } else if (remainingSpace > 0) {
-                                // Split la réservation
-                                Reservation partToAssign = cloneReservation(best, remainingSpace);
-                                Reservation partRemaining = cloneReservation(best, need - remainingSpace);
-                                additionalAssigned.add(partToAssign);
-                                originalsToRemove.add(best); // Track the ORIGINAL to remove
-                                assignedPassengers += remainingSpace;
-                                remainingSpace = 0;
-                                // Ajouter le reste aux NA pour traitement ultérieur
+                            } else if (remainingSpaceExact > 0) {
+                                // Split
+                                Reservation partToAssign = cloneReservation(r, remainingSpaceExact);
+                                Reservation partRemaining = cloneReservation(r, need - remainingSpaceExact);
+                                assignedAtExactTime.add(partToAssign);
+                                originalsToRemoveExact.add(r);
+                                assignedPassengers += remainingSpaceExact;
+                                remainingSpaceExact = 0;
                                 lastUnassignedParts.add(partRemaining);
                             }
+                            if (remainingSpaceExact <= 0) break;
                         }
 
-                        // Calculer l'heure de départ
-                        Timestamp departTime;
-                        if (additionalAssigned.isEmpty()) {
-                            // Aucune réservation dans l'intervalle → départ à l'heure de retour du véhicule
-                            departTime = regroupementStart;
-                        } else {
-                            // Départ = max(heure retour véhicule, dernière réservation arrivée)
-                            departTime = regroupementStart;
-                            for (Reservation r : additionalAssigned) {
-                                Timestamp arrival = r.getDateHeureArrivee();
-                                if (arrival != null && arrival.after(departTime)) {
-                                    departTime = arrival;
-                                }
-                            }
-                        }
-
-                        // Combiner NA + réservations additionnelles
-                        List<Reservation> allAssigned = new ArrayList<>(naToAssign);
-                        allAssigned.addAll(additionalAssigned);
-
-                        // Collecter les IDs des réservations assignées pour suppression basée sur ID
-                        Set<Integer> assignedIds = new HashSet<>();
-                        for (Reservation na : naToAssign) {
-                            if (na.getIdReservation() != null) {
-                                assignedIds.add(na.getIdReservation());
-                            }
-                            reservationsNA.remove(na);
-                            lastUnassignedParts.remove(na);
-                        }
-                        for (Reservation r : additionalAssigned) {
-                            if (r.getIdReservation() != null) {
-                                assignedIds.add(r.getIdReservation());
-                            }
-                        }
-                        for (Reservation r : originalsToRemove) {
-                            if (r.getIdReservation() != null) {
-                                assignedIds.add(r.getIdReservation());
-                            }
-                        }
-
-                        // Supprimer de batch et unassigned par ID (pas par référence d'objet)
-                        // On retire TOUS les objets avec cet ID - les clones dans lastUnassignedParts
-                        // seront traités séparément via la priorisation NA
-                        batch.removeIf(r -> r != null && r.getIdReservation() != null
-                                && assignedIds.contains(r.getIdReservation()));
-                        unassigned.removeIf(r -> r != null && r.getIdReservation() != null
-                                && assignedIds.contains(r.getIdReservation()));
-
-                        // Ajouter au résultat
-                        for (Reservation r : allAssigned) {
-                            result.computeIfAbsent(v, k -> new ArrayList<>()).add(r);
-                        }
-
-                        remaining.put(v, remainingSpace);
-
-                        // Si véhicule complet → ne participe pas au calcul de l'heure commune
-                        // Si véhicule pas complet → participe au calcul de l'heure commune
+                        // ========== Vérifier si COMPLET après l'heure exacte ==========
                         if (assignedPassengers == vehicleCapacity) {
-                            // Complet → persister immédiatement sans participer à l'heure commune
+                            // COMPLET → départ IMMÉDIAT à l'heure de disponibilité
+                            List<Reservation> allAssigned = new ArrayList<>(naToAssign);
+                            allAssigned.addAll(assignedAtExactTime);
+
+                            // Collecter les IDs pour suppression
+                            Set<Integer> assignedIds = new HashSet<>();
+                            for (Reservation na : naToAssign) {
+                                if (na.getIdReservation() != null) assignedIds.add(na.getIdReservation());
+                                reservationsNA.remove(na);
+                                lastUnassignedParts.remove(na);
+                            }
+                            for (Reservation r : assignedAtExactTime) {
+                                if (r.getIdReservation() != null) assignedIds.add(r.getIdReservation());
+                            }
+                            for (Reservation r : originalsToRemoveExact) {
+                                if (r.getIdReservation() != null) assignedIds.add(r.getIdReservation());
+                            }
+
+                            batch.removeIf(r -> r != null && r.getIdReservation() != null
+                                    && assignedIds.contains(r.getIdReservation()));
+                            unassigned.removeIf(r -> r != null && r.getIdReservation() != null
+                                    && assignedIds.contains(r.getIdReservation()));
+
+                            for (Reservation r : allAssigned) {
+                                result.computeIfAbsent(v, k -> new ArrayList<>()).add(r);
+                            }
+                            remaining.put(v, 0);
+
+                            // Persister immédiatement avec l'heure de disponibilité
                             try {
-                                Timestamp vehicleRetour = Reservation.calculHeureRetourFromDepart(departTime, allAssigned);
+                                Timestamp vehicleRetour = Reservation.calculHeureRetourFromDepart(regroupementStart, allAssigned);
                                 for (Reservation r : allAssigned) {
-                                    // Vérifier si déjà persisté (éviter doublons)
                                     String key = v.getId() + "_" + r.getIdReservation() + "_" + r.getNbPassager();
                                     if (!persistedAssignations.contains(key)) {
-                                        persistAssignationWithRetour(v, r, departTime, vehicleRetour);
+                                        persistAssignationWithRetour(v, r, regroupementStart, vehicleRetour);
                                         persistedAssignations.add(key);
                                     }
                                 }
                                 expectedReturnTimes.put(v, vehicleRetour);
                             } catch (SQLException ignore) {
                             }
-                            lastDepartTimes.put(v, departTime);
-                        } else {
-                            // Pas complet → participe au calcul de l'heure commune
+                            lastDepartTimes.put(v, regroupementStart);
+                        }
+                        // ========== Sinon → déclencher regroupement ==========
+                        else {
+                            Timestamp regroupementEnd = new Timestamp(regroupementStart.getTime() + taMinutes * 60L * 1000L);
+
+                            // Chercher les réservations dans l'intervalle de regroupement (APRÈS l'heure exacte)
+                            List<Reservation> resasInInterval = new ArrayList<>();
+                            for (Reservation r : batch) {
+                                if (r == null || naToAssign.contains(r) || assignedAtExactTime.contains(r) || originalsToRemoveExact.contains(r)) continue;
+                                Timestamp arrival = r.getDateHeureArrivee();
+                                if (arrival != null && arrival.after(regroupementStart) && arrival.before(regroupementEnd)) {
+                                    resasInInterval.add(r);
+                                }
+                            }
+
+                            // Calcul de l'heure de départ commune du regroupement
+                            Timestamp regroupementDepartTime = regroupementStart;
+                            for (Reservation r : assignedAtExactTime) {
+                                Timestamp arrival = r.getDateHeureArrivee();
+                                if (arrival != null && arrival.after(regroupementDepartTime)) {
+                                    regroupementDepartTime = arrival;
+                                }
+                            }
+                            for (Reservation r : resasInInterval) {
+                                Timestamp arrival = r.getDateHeureArrivee();
+                                if (arrival != null && arrival.after(regroupementDepartTime)) {
+                                    regroupementDepartTime = arrival;
+                                }
+                            }
+
+                            // Assigner les réservations du regroupement
+                            int remainingSpace = vehicleCapacity - assignedPassengers;
+                            List<Reservation> additionalAssigned = new ArrayList<>();
+                            List<Reservation> originalsToRemove = new ArrayList<>(originalsToRemoveExact);
+                            List<Reservation> availableResas = new ArrayList<>(resasInInterval);
+
+                            while (remainingSpace > 0 && !availableResas.isEmpty()) {
+                                final int currentRemainingSpace = remainingSpace;
+                                availableResas.sort((a, b) -> {
+                                    int pa = a.getNbPassager() != null ? a.getNbPassager() : 0;
+                                    int pb = b.getNbPassager() != null ? b.getNbPassager() : 0;
+                                    int distA = Math.abs(pa - currentRemainingSpace);
+                                    int distB = Math.abs(pb - currentRemainingSpace);
+                                    if (distA != distB) {
+                                        return Integer.compare(distA, distB);
+                                    }
+                                    return Integer.compare(pb, pa);
+                                });
+
+                                Reservation best = availableResas.remove(0);
+                                int need = best.getNbPassager() != null ? best.getNbPassager() : 0;
+
+                                if (need <= remainingSpace) {
+                                    additionalAssigned.add(best);
+                                    originalsToRemove.add(best);
+                                    remainingSpace -= need;
+                                    assignedPassengers += need;
+                                } else if (remainingSpace > 0) {
+                                    Reservation partToAssign = cloneReservation(best, remainingSpace);
+                                    Reservation partRemaining = cloneReservation(best, need - remainingSpace);
+                                    additionalAssigned.add(partToAssign);
+                                    originalsToRemove.add(best);
+                                    assignedPassengers += remainingSpace;
+                                    remainingSpace = 0;
+                                    lastUnassignedParts.add(partRemaining);
+                                }
+                            }
+
+                            // Combiner NA + exact time + additional
+                            List<Reservation> allAssignedToTrigger = new ArrayList<>(naToAssign);
+                            allAssignedToTrigger.addAll(assignedAtExactTime);
+                            allAssignedToTrigger.addAll(additionalAssigned);
+
+                            // Réservations restantes du regroupement
+                            List<Reservation> remainingFromRegroupement = new ArrayList<>(availableResas);
+
+                            // Ajouter au résultat
+                            for (Reservation r : allAssignedToTrigger) {
+                                result.computeIfAbsent(v, k -> new ArrayList<>()).add(r);
+                            }
+                            remaining.put(v, remainingSpace);
+
+                            // Collecter les IDs
+                            Set<Integer> assignedIds = new HashSet<>();
+                            for (Reservation na : naToAssign) {
+                                if (na.getIdReservation() != null) assignedIds.add(na.getIdReservation());
+                                reservationsNA.remove(na);
+                                lastUnassignedParts.remove(na);
+                            }
+                            for (Reservation r : assignedAtExactTime) {
+                                if (r.getIdReservation() != null) assignedIds.add(r.getIdReservation());
+                            }
+                            for (Reservation r : additionalAssigned) {
+                                if (r.getIdReservation() != null) assignedIds.add(r.getIdReservation());
+                            }
+                            for (Reservation r : originalsToRemove) {
+                                if (r.getIdReservation() != null) assignedIds.add(r.getIdReservation());
+                            }
+
+                            // Véhicule déclencheur participe au regroupement
                             vehiclesUsedInInterval.add(v);
-                            for (Reservation r : allAssigned) {
+                            for (Reservation r : allAssignedToTrigger) {
                                 assignedPairs.add(new AssignPair(v, r));
                             }
+
+                            // Assigner les réservations restantes à d'autres véhicules
+                            if (!remainingFromRegroupement.isEmpty()) {
+                                remainingFromRegroupement.sort((a, b) -> {
+                                    int pa = a.getNbPassager() != null ? a.getNbPassager() : 0;
+                                    int pb = b.getNbPassager() != null ? b.getNbPassager() : 0;
+                                    return Integer.compare(pb, pa);
+                                });
+
+                                for (Reservation r : remainingFromRegroupement) {
+                                    int need = r.getNbPassager() != null ? r.getNbPassager() : 0;
+                                    if (need <= 0) continue;
+
+                                    Vehicule otherVehicle = null;
+                                    int bestSpace = 0;
+                                    for (Vehicule vOther : vehicles) {
+                                        if (vOther.getId().equals(v.getId())) continue;
+                                        int space = remaining.get(vOther);
+                                        if (space >= need && (otherVehicle == null || space < bestSpace)) {
+                                            otherVehicle = vOther;
+                                            bestSpace = space;
+                                        }
+                                    }
+
+                                    if (otherVehicle == null) {
+                                        for (Vehicule vOther : vehicles) {
+                                            if (vOther.getId().equals(v.getId())) continue;
+                                            int space = remaining.get(vOther);
+                                            if (space > 0 && space > bestSpace) {
+                                                otherVehicle = vOther;
+                                                bestSpace = space;
+                                            }
+                                        }
+                                    }
+
+                                    if (otherVehicle != null) {
+                                        int space = remaining.get(otherVehicle);
+                                        if (need <= space) {
+                                            result.computeIfAbsent(otherVehicle, k -> new ArrayList<>()).add(r);
+                                            remaining.put(otherVehicle, space - need);
+                                            vehiclesUsedInInterval.add(otherVehicle);
+                                            assignedPairs.add(new AssignPair(otherVehicle, r));
+                                            if (r.getIdReservation() != null) assignedIds.add(r.getIdReservation());
+                                        } else if (space > 0) {
+                                            Reservation partToAssign = cloneReservation(r, space);
+                                            Reservation partRemaining = cloneReservation(r, need - space);
+                                            result.computeIfAbsent(otherVehicle, k -> new ArrayList<>()).add(partToAssign);
+                                            remaining.put(otherVehicle, 0);
+                                            vehiclesUsedInInterval.add(otherVehicle);
+                                            assignedPairs.add(new AssignPair(otherVehicle, partToAssign));
+                                            lastUnassignedParts.add(partRemaining);
+                                            if (r.getIdReservation() != null) assignedIds.add(r.getIdReservation());
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Supprimer de batch et unassigned
+                            batch.removeIf(r -> r != null && r.getIdReservation() != null
+                                    && assignedIds.contains(r.getIdReservation()));
+                            unassigned.removeIf(r -> r != null && r.getIdReservation() != null
+                                    && assignedIds.contains(r.getIdReservation()));
                         }
                     }
                 }
